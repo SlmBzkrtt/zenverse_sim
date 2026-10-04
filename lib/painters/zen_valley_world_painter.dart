@@ -3055,7 +3055,7 @@ class ZenValleyWorldPainter extends CustomPainter {
     canvas.translate(cx, cy);
     canvas.scale(totalScale);
 
-    // 1. Directional Radial Ground Shadow on the mossy Kyoto earth (rotates with -cameraYaw like CoconutWorldPainter)
+    // 1. Directional Radial Ground Shadow on the mossy Kyoto earth (rotates with -cameraYaw)
     final double sunRelativeRad = (-cameraYaw) * math.pi / 180.0;
     final double shadowOffsetX = -math.sin(sunRelativeRad) * 26.0;
     final double shadowOffsetY = 18.0 + math.cos(sunRelativeRad) * 8.0;
@@ -3087,56 +3087,202 @@ class ZenValleyWorldPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
     );
 
-    // 2. Sculpted Multi-Boulder Iwakura / Suiseki Formation (-116..+116 wide, rising to -130 tall)
-    // Left Wing Boulder (supporting the bamboo Kakei water spout & carved rock basin)
-    final Path leftBoulder = Path()
-      ..moveTo(-114, 18)
-      ..cubicTo(-122, -8, -112, -48, -86, -74)
-      ..cubicTo(-64, -92, -38, -82, -28, -48)
-      ..lineTo(-34, 20)
-      ..close();
-    canvas.drawPath(
-      leftBoulder,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          const Offset(-108, -80),
-          const Offset(-35, 22),
-          [
-            const Color(0xFF66727C),
-            const Color(0xFF454E57),
-            const Color(0xFF2B3238),
-          ],
-          const [0.0, 0.55, 1.0],
-        ),
-    );
+    // Helper for 3D orbiting wing boulders & Bamboo Kakei water spout (sorted back/front by cos)
+    void drawOrbitingWingBoulders({required bool frontPass}) {
+      // Wing Boulder 1 (Azimuth 300° / -60°): Kakei Bamboo Water Spout & Tsukubai Basin Boulder
+      final double kakeiRad = (300.0 - cameraYaw) * math.pi / 180.0;
+      if ((math.cos(kakeiRad) >= 0) == frontPass) {
+        final double wx = math.sin(kakeiRad) * 72.0;
+        final double wy = math.cos(kakeiRad) * 8.0;
+        canvas.save();
+        canvas.translate(wx, wy);
 
-    // Right Wing Boulder (terraced meditation ledge boulder)
-    final Path rightBoulder = Path()
-      ..moveTo(26, 20)
-      ..lineTo(34, -56)
-      ..cubicTo(52, -86, 82, -82, 104, -52)
-      ..cubicTo(118, -26, 120, -2, 112, 18)
-      ..close();
-    canvas.drawPath(
-      rightBoulder,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          const Offset(40, -82),
-          const Offset(112, 20),
-          [
-            const Color(0xFF606B75),
-            const Color(0xFF3E4750),
-            const Color(0xFF242A30),
-          ],
-          const [0.0, 0.55, 1.0],
-        ),
-    );
+        final Path wingBoulder = Path()
+          ..moveTo(-44, 16)
+          ..cubicTo(-52, -8, -42, -46, -16, -70)
+          ..cubicTo(6, -86, 32, -76, 42, -44)
+          ..lineTo(36, 18)
+          ..close();
+        canvas.drawPath(
+          wingBoulder,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              const Offset(-38, -76),
+              const Offset(35, 20),
+              [
+                const Color(0xFF66727C),
+                const Color(0xFF454E57),
+                const Color(0xFF2B3238),
+              ],
+              const [0.0, 0.55, 1.0],
+            ),
+        );
 
-    // Towering Central Sacred Iwakura Peak Boulder (rising to -130)
+        // Moss cushion on top of Kakei boulder
+        final Rect kMoss = const Rect.fromLTWH(-32, -74, 58, 24);
+        canvas.drawOval(
+          kMoss,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              kMoss.topCenter,
+              kMoss.bottomCenter,
+              [const Color(0xFF7CB342), const Color(0xFF338A3E)],
+            ),
+        );
+
+        // Carved stone water basin (Tsukubai) & Bamboo Kakei water spout
+        canvas.drawOval(
+          const Rect.fromLTWH(-26, -18, 44, 16),
+          Paint()..color = const Color(0xFF374047),
+        );
+        canvas.drawOval(
+          const Rect.fromLTWH(-20, -15, 32, 11),
+          Paint()..color = const Color(0xFF26C6DA),
+        );
+        canvas.drawLine(
+          const Offset(-34, -8),
+          const Offset(-34, -46),
+          Paint()
+            ..color = const Color(0xFF689F38)
+            ..strokeWidth = 5.0
+            ..strokeCap = StrokeCap.round,
+        );
+        canvas.drawLine(
+          const Offset(-36, -38),
+          const Offset(-6, -28),
+          Paint()
+            ..color = const Color(0xFF8BC34A)
+            ..strokeWidth = 4.2
+            ..strokeCap = StrokeCap.round,
+        );
+        canvas.drawLine(
+          const Offset(-6, -27),
+          const Offset(-2, -9),
+          Paint()
+            ..color = const Color(0xFFB2EBF2).withValues(alpha: 0.85)
+            ..strokeWidth = 2.0,
+        );
+        for (int d = 0; d < 3; d++) {
+          final double dropT = (time * 3.2 + d * 0.33) % 1.0;
+          canvas.drawCircle(
+            Offset(-6 + dropT * 4.0, -27 + dropT * 18.0),
+            1.8,
+            Paint()..color = Colors.white,
+          );
+        }
+        final double basinRipple = (time * 1.8) % 1.0;
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: const Offset(-2, -9),
+            width: 8 + basinRipple * 16,
+            height: 3 + basinRipple * 5,
+          ),
+          Paint()
+            ..color =
+                Colors.white.withValues(alpha: (1.0 - basinRipple) * 0.85)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.2,
+        );
+        canvas.restore();
+      }
+
+      // Wing Boulder 2 (Azimuth 65°): Terraced Meditation Ledge Boulder
+      final double rightRad = (65.0 - cameraYaw) * math.pi / 180.0;
+      if ((math.cos(rightRad) >= 0) == frontPass) {
+        final double rx = math.sin(rightRad) * 70.0;
+        final double ry = math.cos(rightRad) * 8.0;
+        canvas.save();
+        canvas.translate(rx, ry);
+        final Path rightBoulder = Path()
+          ..moveTo(-42, 18)
+          ..lineTo(-34, -54)
+          ..cubicTo(-16, -84, 14, -80, 36, -50)
+          ..cubicTo(50, -24, 52, 0, 44, 18)
+          ..close();
+        canvas.drawPath(
+          rightBoulder,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              const Offset(-28, -80),
+              const Offset(44, 18),
+              [
+                const Color(0xFF606B75),
+                const Color(0xFF3E4750),
+                const Color(0xFF242A30),
+              ],
+              const [0.0, 0.55, 1.0],
+            ),
+        );
+        final Rect rMoss = const Rect.fromLTWH(-24, -70, 58, 24);
+        canvas.drawOval(
+          rMoss,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              rMoss.topCenter,
+              rMoss.bottomCenter,
+              [const Color(0xFF7CB342), const Color(0xFF338A3E)],
+            ),
+        );
+        canvas.restore();
+      }
+
+      // Wing Boulder 3 (Azimuth 180°): Back Mossy Sanctuary Ledge
+      final double backRad = (180.0 - cameraYaw) * math.pi / 180.0;
+      if ((math.cos(backRad) >= 0) == frontPass) {
+        final double bx = math.sin(backRad) * 68.0;
+        final double by = math.cos(backRad) * 8.0;
+        canvas.save();
+        canvas.translate(bx, by);
+        final Path backBoulder = Path()
+          ..moveTo(-40, 16)
+          ..cubicTo(-44, -18, -28, -62, 0, -68)
+          ..cubicTo(28, -62, 44, -18, 40, 16)
+          ..close();
+        canvas.drawPath(
+          backBoulder,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              const Offset(-20, -68),
+              const Offset(30, 16),
+              [
+                const Color(0xFF5C6770),
+                const Color(0xFF3B434C),
+                const Color(0xFF22272D),
+              ],
+              const [0.0, 0.55, 1.0],
+            ),
+        );
+        final Rect bMoss = const Rect.fromLTWH(-26, -64, 52, 22);
+        canvas.drawOval(
+          bMoss,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              bMoss.topCenter,
+              bMoss.bottomCenter,
+              [const Color(0xFF7CB342), const Color(0xFF338A3E)],
+            ),
+        );
+        canvas.restore();
+      }
+    }
+
+    // Draw back-hemisphere wing boulders behind the central peak
+    drawOrbitingWingBoulders(frontPass: false);
+
+    // 2. Towering Central Sacred Iwakura Peak Boulder (rising to -130) with 3D Rotating Facets & Crevices!
+    final double lightShiftX = math.sin(sunRelativeRad) * 32.0;
+    final double peakTiltX = math.sin((-cameraYaw) * math.pi / 180.0) * 6.0;
     final Path centralPeak = Path()
       ..moveTo(-76, 22)
-      ..cubicTo(-84, -14, -66, -74, -36, -112)
-      ..cubicTo(-14, -132, 16, -132, 38, -108)
+      ..cubicTo(-84, -14, -66, -74, -36 + peakTiltX, -112)
+      ..cubicTo(
+        -14 + peakTiltX,
+        -132,
+        16 + peakTiltX,
+        -132,
+        38 + peakTiltX,
+        -108,
+      )
       ..cubicTo(66, -70, 80, -14, 74, 22)
       ..cubicTo(34, 32, -34, 32, -76, 22)
       ..close();
@@ -3144,8 +3290,8 @@ class ZenValleyWorldPainter extends CustomPainter {
       centralPeak,
       Paint()
         ..shader = ui.Gradient.linear(
-          const Offset(-42, -130),
-          const Offset(56, 26),
+          Offset(-42 + lightShiftX, -130),
+          Offset(56 + lightShiftX, 26),
           [
             const Color(0xFF75818B),
             const Color(0xFF4D5760),
@@ -3155,196 +3301,140 @@ class ZenValleyWorldPainter extends CustomPainter {
         ),
     );
 
-    // Chiseled 3D rock facets & natural granite crevices
-    final Path leftPeakFacet = Path()
-      ..moveTo(-66, 16)
-      ..lineTo(-42, -74)
-      ..lineTo(-6, -124)
-      ..lineTo(-8, -22)
-      ..lineTo(-32, 22)
-      ..close();
-    canvas.drawPath(
-      leftPeakFacet,
-      Paint()..color = const Color(0xFF88949E).withValues(alpha: 0.34),
-    );
-
-    final Path rightPeakShadowFacet = Path()
-      ..moveTo(-6, -124)
-      ..lineTo(36, -104)
-      ..lineTo(66, 14)
-      ..lineTo(18, 24)
-      ..lineTo(-8, -22)
-      ..close();
-    canvas.drawPath(
-      rightPeakShadowFacet,
-      Paint()..color = const Color(0xFF1F252B).withValues(alpha: 0.42),
-    );
-
-    // Natural dark rock crevices
+    // 3D Rotating Chiseled Rock Ridges & Granite Crevices around the 360° boulder surface!
+    final Paint ridgeHighlightPaint = Paint()
+      ..color = const Color(0xFF909CA6).withValues(alpha: 0.36)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.2
+      ..strokeCap = StrokeCap.round;
     final Paint crevicePaint = Paint()
       ..color = const Color(0xFF1B2026).withValues(alpha: 0.68)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round;
-    canvas.drawPath(
-      Path()
-        ..moveTo(-34, -84)
-        ..lineTo(-18, -42)
-        ..lineTo(-28, 4),
-      crevicePaint,
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(24, -74)
-        ..lineTo(14, -26)
-        ..lineTo(30, 8),
-      crevicePaint,
-    );
 
-    // 3. Small Carved Stone Steps ascending the front-right base of the boulder
-    for (int st = 0; st < 4; st++) {
-      final double sx = 26.0 - st * 8.0;
-      final double sy = 18.0 - st * 7.5;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(sx, sy), width: 22, height: 6.0),
-          const Radius.circular(2.5),
-        ),
-        Paint()..color = const Color(0xFF8A949D),
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: Offset(sx, sy - 1.2),
-            width: 20,
-            height: 3.0,
-          ),
-          const Radius.circular(2.0),
-        ),
-        Paint()..color = const Color(0xFFB0B9C2),
-      );
-    }
-
-    // 4. Lush Multi-Layered Velvet Green Moss Cushions draping the boulders
-    const List<Rect> mossCushions = [
-      Rect.fromLTWH(-36, -130, 72, 30), // Crown summit moss
-      Rect.fromLTWH(-64, -96, 66, 28), // Upper-left shoulder moss
-      Rect.fromLTWH(8, -92, 62, 26), // Upper-right shoulder moss
-      Rect.fromLTWH(-104, -76, 60, 26), // Left boulder crest moss
-      Rect.fromLTWH(44, -72, 62, 26), // Right boulder crest moss
-      Rect.fromLTWH(-112, -26, 50, 22), // Left mid ledge moss
-      Rect.fromLTWH(56, -24, 54, 24), // Right mid ledge moss
-      Rect.fromLTWH(-52, 2, 64, 22), // Base apron moss
-    ];
-    for (final Rect mr in mossCushions) {
-      canvas.drawOval(
-        mr.shift(const Offset(0, 3)),
-        Paint()..color = const Color(0xFF1B5E20),
-      );
-      canvas.drawOval(
-        mr,
-        Paint()
-          ..shader = ui.Gradient.linear(
-            mr.topCenter,
-            mr.bottomCenter,
-            [const Color(0xFF7CB342), const Color(0xFF338A3E)],
-          ),
-      );
-      canvas.drawOval(
-        mr.deflate(6).shift(const Offset(-3, -3)),
-        Paint()..color = const Color(0xFF9CCC65).withValues(alpha: 0.78),
-      );
-    }
-
-    // 5. Miniature Bamboo Water Spout (Kakei) on the left ledge trickling into a carved rock basin
-    // Carved stone water basin (Tsukubai ledge) on left boulder
-    canvas.drawOval(
-      const Rect.fromLTWH(-98, -18, 44, 16),
-      Paint()..color = const Color(0xFF374047),
-    );
-    canvas.drawOval(
-      const Rect.fromLTWH(-92, -15, 32, 11),
-      Paint()..color = const Color(0xFF26C6DA),
-    );
-    // Bamboo upright post & angled Kakei spout pipe
-    canvas.drawLine(
-      const Offset(-108, -8),
-      const Offset(-108, -46),
-      Paint()
-        ..color = const Color(0xFF689F38)
-        ..strokeWidth = 5.0
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.drawLine(
-      const Offset(-110, -38),
-      const Offset(-80, -28),
-      Paint()
-        ..color = const Color(0xFF8BC34A)
-        ..strokeWidth = 4.2
-        ..strokeCap = StrokeCap.round,
-    );
-    // Animated crystal water stream & falling droplets into the rock basin
-    canvas.drawLine(
-      const Offset(-80, -27),
-      const Offset(-76, -9),
-      Paint()
-        ..color = const Color(0xFFB2EBF2).withValues(alpha: 0.85)
-        ..strokeWidth = 2.0,
-    );
-    for (int d = 0; d < 3; d++) {
-      final double dropT = (time * 3.2 + d * 0.33) % 1.0;
-      canvas.drawCircle(
-        Offset(-80 + dropT * 4.0, -27 + dropT * 18.0),
-        1.8,
-        Paint()..color = Colors.white,
-      );
-    }
-    // Expanding white splash ripple inside the carved rock basin
-    final double basinRipple = (time * 1.8) % 1.0;
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: const Offset(-76, -9),
-        width: 8 + basinRipple * 16,
-        height: 3 + basinRipple * 5,
-      ),
-      Paint()
-        ..color = Colors.white.withValues(alpha: (1.0 - basinRipple) * 0.85)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
-    );
-
-    // 6. Blooming Pink Azalea / Sakura Sprigs & Fallen Sakura Petals on the rock
-    for (final Offset azPos in [
-      const Offset(-54, -76),
-      const Offset(64, -54),
-      const Offset(-82, 6),
-      const Offset(74, 8),
-    ]) {
-      for (int p = 0; p < 3; p++) {
-        canvas.drawCircle(
-          azPos.translate((p - 1) * 5.5, (p.isEven ? -2.0 : 2.0)),
-          4.2,
-          Paint()
-            ..color = p == 1
-                ? const Color(0xFFFCE4EC)
-                : const Color(0xFFF06292),
+    for (int i = 0; i < 10; i++) {
+      final double rRad = (i * 36.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(rRad) > -0.1) {
+        final double s = math.sin(rRad);
+        final Path ridgePath = Path()
+          ..moveTo(peakTiltX + s * 22.0, -116)
+          ..quadraticBezierTo(s * 54.0, -54, s * 66.0, 16);
+        canvas.drawPath(
+          ridgePath,
+          i.isEven ? crevicePaint : ridgeHighlightPaint,
         );
       }
     }
 
-    for (final Offset po in [
-      const Offset(-28, -92),
-      const Offset(24, -84),
-      const Offset(-58, -32),
-      const Offset(54, -18),
-    ]) {
-      canvas.drawOval(
-        Rect.fromCenter(center: po, width: 8, height: 5),
-        Paint()..color = const Color(0xFFF8BBD0),
-      );
+    // 3. 3D Rotating Velvet Green Moss Cushions around the Central Boulder
+    // Crown summit moss
+    final Rect summitMoss = Rect.fromCenter(
+      center: Offset(peakTiltX, -116),
+      width: 72,
+      height: 28,
+    );
+    canvas.drawOval(
+      summitMoss.shift(const Offset(0, 3)),
+      Paint()..color = const Color(0xFF1B5E20),
+    );
+    canvas.drawOval(
+      summitMoss,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          summitMoss.topCenter,
+          summitMoss.bottomCenter,
+          [const Color(0xFF7CB342), const Color(0xFF338A3E)],
+        ),
+    );
+
+    // 6 Orbiting Shoulder & Ledge Moss Cushions around the central boulder
+    for (int m = 0; m < 6; m++) {
+      final double mRad = (m * 60.0 + 20.0 - cameraYaw) * math.pi / 180.0;
+      final double mCos = math.cos(mRad);
+      if (mCos > -0.15) {
+        final double mx = math.sin(mRad) * 48.0;
+        final double my = (m.isEven ? -78.0 : -36.0) + mCos * 6.0;
+        final double mw = (48.0 + (m % 2) * 10.0) * (0.45 + 0.55 * mCos.clamp(0.0, 1.0));
+        final Rect mr = Rect.fromCenter(
+          center: Offset(mx, my),
+          width: mw,
+          height: 22.0,
+        );
+        canvas.drawOval(
+          mr.shift(const Offset(0, 2.5)),
+          Paint()..color = const Color(0xFF1B5E20),
+        );
+        canvas.drawOval(
+          mr,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              mr.topCenter,
+              mr.bottomCenter,
+              [const Color(0xFF7CB342), const Color(0xFF338A3E)],
+            ),
+        );
+      }
     }
 
-    // 7. Style-Specific Customizations (natural, arcade, cocktail, king, lofi)
+    // Draw front-hemisphere wing boulders in front of the central peak!
+    drawOrbitingWingBoulders(frontPass: true);
+
+    // 4. 3D Rotating Carved Stone Steps ascending the boulder at azimuth 25°
+    final double stepBaseRad = (25.0 - cameraYaw) * math.pi / 180.0;
+    if (math.cos(stepBaseRad) > -0.1) {
+      final double stepSquash = math.cos(stepBaseRad).clamp(0.35, 1.0);
+      for (int st = 0; st < 4; st++) {
+        final double sRad = (25.0 - st * 8.0 - cameraYaw) * math.pi / 180.0;
+        final double sx = math.sin(sRad) * (46.0 - st * 6.0);
+        final double sy = 18.0 - st * 7.5 + math.cos(sRad) * 4.0;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: Offset(sx, sy),
+              width: 22 * stepSquash,
+              height: 6.0,
+            ),
+            const Radius.circular(2.5),
+          ),
+          Paint()..color = const Color(0xFF8A949D),
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: Offset(sx, sy - 1.2),
+              width: 20 * stepSquash,
+              height: 3.0,
+            ),
+            const Radius.circular(2.0),
+          ),
+          Paint()..color = const Color(0xFFB0B9C2),
+        );
+      }
+    }
+
+    // 5. 3D Orbiting Blooming Pink Azalea / Sakura Sprigs around the rock
+    for (int a = 0; a < 6; a++) {
+      final double azRad = (a * 60.0 + 40.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(azRad) > 0.0) {
+        final Offset azPos = Offset(
+          math.sin(azRad) * 66.0,
+          (a.isEven ? -56.0 : -14.0) + math.cos(azRad) * 5.0,
+        );
+        for (int p = 0; p < 3; p++) {
+          canvas.drawCircle(
+            azPos.translate((p - 1) * 5.5, (p.isEven ? -2.0 : 2.0)),
+            4.2,
+            Paint()
+              ..color = p == 1
+                  ? const Color(0xFFFCE4EC)
+                  : const Color(0xFFF06292),
+          );
+        }
+      }
+    }
+
+    // 6. Style-Specific 3D Rotating Customizations (natural, arcade, cocktail, king, lofi)
     final CoconutStyleMode activeStyle =
         isArcadeMode && styleMode == CoconutStyleMode.natural
         ? CoconutStyleMode.arcade
@@ -3368,8 +3458,7 @@ class ZenValleyWorldPainter extends CustomPainter {
         break;
     }
 
-    // 8. Ground Integration Nest (mossNest & river pebbles tucked over the bottom edge y = 6..28,
-    //    painted in the exact foreground mossy earth tones so the boulder sits embedded in the ground!)
+    // 7. Ground Integration Nest with 3D Rotating Basalt River Pebbles & Fallen Sakura Petals
     final Color turfBase = atmosphereMode == CoconutAtmosphereMode.night
         ? const Color(0xFF16382E)
         : (atmosphereMode == CoconutAtmosphereMode.noon
@@ -3383,52 +3472,57 @@ class ZenValleyWorldPainter extends CustomPainter {
 
     final Path mossNest = Path()
       ..moveTo(-124, 18)
-      ..quadraticBezierTo(-82, 4, -38, 15)
-      ..quadraticBezierTo(0, 6, 40, 15)
-      ..quadraticBezierTo(84, 5, 122, 18)
+      ..quadraticBezierTo(-82 + peakTiltX, 4, -38 + peakTiltX, 15)
+      ..quadraticBezierTo(peakTiltX, 6, 40 + peakTiltX, 15)
+      ..quadraticBezierTo(84 + peakTiltX, 5, 122, 18)
       ..quadraticBezierTo(60, 32, 0, 30)
       ..quadraticBezierTo(-60, 32, -124, 18)
       ..close();
     canvas.drawPath(mossNest, Paint()..color = turfBase);
 
-    // Secondary soft mossy turf mounds & dark basalt river pebbles embedding the rock base
-    for (final Rect mound in [
-      const Rect.fromLTWH(-112, 10, 56, 16),
-      const Rect.fromLTWH(-34, 12, 68, 16),
-      const Rect.fromLTWH(52, 10, 58, 16),
-    ]) {
-      canvas.drawOval(mound, Paint()..color = turfHighlight);
+    for (int m = 0; m < 4; m++) {
+      final double mRad = (m * 90.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(mRad) > -0.2) {
+        final double mx = math.sin(mRad) * 78.0;
+        final double my = 15.0 + math.cos(mRad) * 4.0;
+        canvas.drawOval(
+          Rect.fromCenter(center: Offset(mx, my), width: 56, height: 15),
+          Paint()..color = turfHighlight,
+        );
+      }
     }
 
-    for (final Rect pebble in [
-      const Rect.fromLTWH(-94, 14, 18, 9),
-      const Rect.fromLTWH(-46, 18, 15, 8),
-      const Rect.fromLTWH(28, 17, 19, 9),
-      const Rect.fromLTWH(82, 14, 16, 8),
-    ]) {
-      canvas.drawOval(pebble, Paint()..color = const Color(0xFF3B444C));
-    }
-
-    // Fallen pink sakura petals resting in the mossy nest at the base of the rock
-    for (final Offset basePetal in [
-      const Offset(-72, 20),
-      const Offset(-12, 22),
-      const Offset(54, 21),
-    ]) {
-      canvas.drawOval(
-        Rect.fromCenter(center: basePetal, width: 7.5, height: 4.5),
-        Paint()..color = const Color(0xFFF8BBD0),
-      );
+    // 8 Orbiting Basalt River Pebbles & Sakura Petals around the base nest
+    for (int p = 0; p < 8; p++) {
+      final double pRad = (p * 45.0 + 15.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(pRad) > -0.1) {
+        final double px = math.sin(pRad) * 92.0;
+        final double py = 18.0 + math.cos(pRad) * 5.0;
+        canvas.drawOval(
+          Rect.fromCenter(center: Offset(px, py), width: 17, height: 8.5),
+          Paint()..color = const Color(0xFF3B444C),
+        );
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(px * 0.78, py + 3.0),
+            width: 7.5,
+            height: 4.5,
+          ),
+          Paint()..color = const Color(0xFFF8BBD0),
+        );
+      }
     }
 
     canvas.restore();
   }
 
   void _drawNaturalRockDetails(Canvas canvas) {
-    // Delicate green fern frond sprouting from upper-left moss cushion
+    // 3D Rotating green fern frond sprouting at azimuth 315°
+    final double fernRad = (315.0 - cameraYaw) * math.pi / 180.0;
+    final double fernX = math.sin(fernRad) * 42.0;
     final Path fernStem = Path()
-      ..moveTo(-42, -98)
-      ..quadraticBezierTo(-62, -122, -52, -142);
+      ..moveTo(fernX, -98)
+      ..quadraticBezierTo(fernX - 18, -122, fernX - 10, -142);
     canvas.drawPath(
       fernStem,
       Paint()
@@ -3439,19 +3533,20 @@ class ZenValleyWorldPainter extends CustomPainter {
     for (int f = 1; f <= 5; f++) {
       final double fy = -100.0 - f * 7.5;
       canvas.drawOval(
-        Rect.fromCenter(center: Offset(-62, fy), width: 11, height: 4.5),
+        Rect.fromCenter(center: Offset(fernX - 18, fy), width: 11, height: 4.5),
         Paint()..color = const Color(0xFF8BC34A),
       );
       canvas.drawOval(
-        Rect.fromCenter(center: Offset(-48, fy), width: 11, height: 4.5),
+        Rect.fromCenter(center: Offset(fernX - 4, fy), width: 11, height: 4.5),
         Paint()..color = const Color(0xFF8BC34A),
       );
     }
 
-    // Cute breathing green tree frog (Amagaeru) perched atop the summit moss cushion
+    // Cute breathing green tree frog (Amagaeru) perched atop the summit moss cushion (rotates with cameraYaw)
+    final double frogRad = (20.0 - cameraYaw) * math.pi / 180.0;
     final double throatPulse = 1.0 + math.sin(time * 4.5) * 0.22;
     canvas.save();
-    canvas.translate(8, -126);
+    canvas.translate(math.sin(frogRad) * 14.0, -126 + math.cos(frogRad) * 2.5);
     canvas.drawOval(
       const Rect.fromLTWH(-13, -8, 26, 16),
       Paint()..color = const Color(0xFF66BB6A),
@@ -3483,15 +3578,15 @@ class ZenValleyWorldPainter extends CustomPainter {
     }
     canvas.restore();
 
-    // Animated Hovering Iridescent Blue-Green Dragonfly (Haguro-tonbo) near the bamboo water spout
-    final double dfX = -68.0 + math.sin(time * 2.8) * 14.0;
+    // Animated Hovering Iridescent Blue-Green Dragonfly orbiting with the bamboo water spout (azimuth 300°)
+    final double dfBaseX = math.sin((300.0 - cameraYaw) * math.pi / 180.0) * 68.0;
+    final double dfX = dfBaseX + math.sin(time * 2.8) * 14.0;
     final double dfY = -104.0 + math.cos(time * 3.6) * 8.0;
     final double wingBuzz = math.sin(time * 28.0) * 0.25;
     canvas.save();
     canvas.translate(dfX, dfY);
     canvas.rotate(-0.18 + math.sin(time * 2.0) * 0.08);
 
-    // Translucent iridescent wings (4 wings)
     for (double side in [-1.0, 1.0]) {
       for (double pair in [-0.22, 0.22]) {
         canvas.save();
@@ -3508,7 +3603,6 @@ class ZenValleyWorldPainter extends CustomPainter {
         canvas.restore();
       }
     }
-    // Metallic emerald-teal dragonfly abdomen, thorax & head
     canvas.drawLine(
       const Offset(0, -5),
       const Offset(0, 16),
@@ -3526,7 +3620,13 @@ class ZenValleyWorldPainter extends CustomPainter {
   }
 
   void _drawArcadeRockDetails(Canvas canvas) {
-    // Red Karate Headband (Hachimaki) tied around the central peak boulder with fluttering tails
+    final double frontRad = (15.0 - cameraYaw) * math.pi / 180.0;
+    final double frontSin = math.sin(frontRad);
+    final double frontCos = math.cos(frontRad);
+    final double knotRad = (75.0 - cameraYaw) * math.pi / 180.0;
+    final double knotX = math.sin(knotRad) * 64.0;
+
+    // Red Karate Headband (Hachimaki) tied around the central peak boulder with 3D rotating knot & tails
     final Path headband = Path()
       ..moveTo(-66, -74)
       ..quadraticBezierTo(0, -60, 66, -74)
@@ -3537,16 +3637,16 @@ class ZenValleyWorldPainter extends CustomPainter {
 
     final double tailWave = math.sin(time * 6.0) * 6.0;
     canvas.drawCircle(
-      const Offset(64, -79),
+      Offset(knotX, -79),
       7.0,
       Paint()..color = const Color(0xFFB71C1C),
     );
     final Path tail1 = Path()
-      ..moveTo(66, -79)
-      ..quadraticBezierTo(88, -88 + tailWave, 108, -76 - tailWave);
+      ..moveTo(knotX, -79)
+      ..quadraticBezierTo(knotX + 22, -88 + tailWave, knotX + 42, -76 - tailWave);
     final Path tail2 = Path()
-      ..moveTo(66, -77)
-      ..quadraticBezierTo(86, -66 - tailWave, 104, -56 + tailWave);
+      ..moveTo(knotX, -77)
+      ..quadraticBezierTo(knotX + 20, -66 - tailWave, knotX + 38, -56 + tailWave);
     canvas.drawPath(
       tail1,
       Paint()
@@ -3564,84 +3664,109 @@ class ZenValleyWorldPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
-    // Cool Aviator / Pixel Sunglasses
-    final Paint framePaint = Paint()..color = const Color(0xFF111418);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(-54, -58, 46, 25),
-        const Radius.circular(5),
-      ),
-      framePaint,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(8, -58, 46, 25),
-        const Radius.circular(5),
-      ),
-      framePaint,
-    );
-    canvas.drawRect(const Rect.fromLTWH(-8, -54, 16, 4), framePaint);
-
-    final Paint glarePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.75)
-      ..strokeWidth = 3.0
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(
-      const Offset(-44, -52),
-      const Offset(-32, -40),
-      glarePaint,
-    );
-    canvas.drawLine(const Offset(16, -52), const Offset(28, -40), glarePaint);
-
-    final Path smile = Path()
-      ..moveTo(-24, -18)
-      ..quadraticBezierTo(0, -2, 24, -18);
-    canvas.drawPath(
-      smile,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.6
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  void _drawShimenawaShrineRockDetails(Canvas canvas) {
-    // Sacred Shimenawa braided rice-straw rope tied around the central peak
-    for (int seg = -5; seg <= 5; seg++) {
-      final double sx = seg * 13.5;
-      final double sy = -52.0 + (seg * seg) * 0.25;
-      canvas.drawOval(
-        Rect.fromCenter(center: Offset(sx, sy), width: 18, height: 10),
-        Paint()
-          ..color = seg.isEven
-              ? const Color(0xFFD7B377)
-              : const Color(0xFFC29B5C),
+    // 3D Rotating Aviator / Pixel Sunglasses & Smile on front hemisphere
+    if (frontCos > -0.15) {
+      final double cxOff = frontSin * 28.0;
+      final double squash = frontCos.clamp(0.30, 1.0);
+      final Paint framePaint = Paint()..color = const Color(0xFF111418);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(cxOff - 31 * squash, -45.5),
+            width: 46 * squash,
+            height: 25,
+          ),
+          const Radius.circular(5),
+        ),
+        framePaint,
       );
-    }
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(cxOff + 31 * squash, -45.5),
+            width: 46 * squash,
+            height: 25,
+          ),
+          const Radius.circular(5),
+        ),
+        framePaint,
+      );
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(cxOff, -52),
+          width: 16 * squash,
+          height: 4,
+        ),
+        framePaint,
+      );
 
-    for (double sx in [-46.0, -15.0, 15.0, 46.0]) {
-      final Path shide = Path()
-        ..moveTo(sx, -46)
-        ..lineTo(sx - 5, -36)
-        ..lineTo(sx + 4, -36)
-        ..lineTo(sx - 6, -26)
-        ..lineTo(sx + 3, -26)
-        ..lineTo(sx - 2, -16);
+      final Path smile = Path()
+        ..moveTo(cxOff - 24 * squash, -18)
+        ..quadraticBezierTo(cxOff, -2, cxOff + 24 * squash, -18);
       canvas.drawPath(
-        shide,
+        smile,
         Paint()
           ..color = Colors.white
           ..style = PaintingStyle.stroke
           ..strokeWidth = 3.6
-          ..strokeJoin = StrokeJoin.miter,
+          ..strokeCap = StrokeCap.round,
       );
     }
+  }
 
-    _drawStoneToroLantern(canvas, const Offset(0, -124), scale: 1.08);
+  void _drawShimenawaShrineRockDetails(Canvas canvas) {
+    // Sacred Shimenawa braided rice-straw rope tied around the central peak (rotating braids & shide!)
+    for (int seg = 0; seg < 14; seg++) {
+      final double sRad = (seg * (360.0 / 14) - cameraYaw) * math.pi / 180.0;
+      if (math.cos(sRad) > -0.1) {
+        final double sx = math.sin(sRad) * 68.0;
+        final double sy = -52.0 + math.cos(sRad) * 6.0;
+        canvas.drawOval(
+          Rect.fromCenter(center: Offset(sx, sy), width: 18, height: 10),
+          Paint()
+            ..color = seg.isEven
+                ? const Color(0xFFD7B377)
+                : const Color(0xFFC29B5C),
+        );
+      }
+    }
+
+    // 8 White Shide zig-zag paper tassels rotating 360° around the Shimenawa rope!
+    for (int k = 0; k < 8; k++) {
+      final double shRad = (k * 45.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(shRad) > 0.0) {
+        final double sx = math.sin(shRad) * 64.0;
+        final double sy = -46.0 + math.cos(shRad) * 5.0;
+        final Path shide = Path()
+          ..moveTo(sx, sy)
+          ..lineTo(sx - 5, sy + 10)
+          ..lineTo(sx + 4, sy + 10)
+          ..lineTo(sx - 6, sy + 20)
+          ..lineTo(sx + 3, sy + 20)
+          ..lineTo(sx - 2, sy + 30);
+        canvas.drawPath(
+          shide,
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3.6
+            ..strokeJoin = StrokeJoin.miter,
+        );
+      }
+    }
+
+    _drawStoneToroLantern(
+      canvas,
+      Offset(math.sin((-cameraYaw) * math.pi / 180.0) * 6.0, -124),
+      scale: 1.08,
+    );
   }
 
   void _drawSakuraSpiritKingDetails(Canvas canvas) {
+    final double rotRad = (-cameraYaw) * math.pi / 180.0;
+    final double rotSin = math.sin(rotRad);
+    final double rotCos = math.cos(rotRad);
+
     canvas.drawCircle(
       const Offset(0, -56),
       132,
@@ -3652,11 +3777,11 @@ class ZenValleyWorldPainter extends CustomPainter {
 
     final Path bonsaiBranch = Path()
       ..moveTo(-8, -122)
-      ..quadraticBezierTo(-24, -150, -48, -154)
+      ..quadraticBezierTo(-24 * rotCos, -150, -48 * rotCos + rotSin * 18, -154)
       ..moveTo(-4, -124)
-      ..quadraticBezierTo(12, -156, 46, -160)
+      ..quadraticBezierTo(12 * rotCos, -156, 46 * rotCos + rotSin * 18, -160)
       ..moveTo(0, -140)
-      ..lineTo(0, -170);
+      ..lineTo(rotSin * 8, -170);
     canvas.drawPath(
       bonsaiBranch,
       Paint()
@@ -3666,12 +3791,12 @@ class ZenValleyWorldPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
-    for (final Offset bo in [
-      const Offset(-46, -156),
-      const Offset(-18, -162),
-      const Offset(8, -170),
-      const Offset(42, -160),
-    ]) {
+    for (int i = 0; i < 4; i++) {
+      final double bRad = (i * 90.0 + 30.0 - cameraYaw) * math.pi / 180.0;
+      final Offset bo = Offset(
+        math.sin(bRad) * 44.0,
+        -162.0 + math.cos(bRad) * 6.0,
+      );
       canvas.drawOval(
         Rect.fromCenter(center: bo, width: 38, height: 22),
         Paint()..color = const Color(0xFFF48FB1),
@@ -3686,23 +3811,29 @@ class ZenValleyWorldPainter extends CustomPainter {
       );
     }
 
-    final Paint runeGlow = Paint()
-      ..color = const Color(0xFF64FFDA)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-    final Paint runeCore = Paint()
-      ..color = const Color(0xFFE0F2F1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4;
+    final double frontRad = (15.0 - cameraYaw) * math.pi / 180.0;
+    if (math.cos(frontRad) > -0.1) {
+      final double rxOff = math.sin(frontRad) * 28.0;
+      final double squash = math.cos(frontRad).clamp(0.3, 1.0);
+      final Paint runeGlow = Paint()
+        ..color = const Color(0xFF64FFDA)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+      final Paint runeCore = Paint()
+        ..color = const Color(0xFFE0F2F1)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.4;
 
-    for (final Offset eye in [const Offset(-26, -54), const Offset(26, -54)]) {
-      canvas.drawCircle(eye, 7, runeGlow);
-      canvas.drawCircle(eye, 5, runeCore);
+      for (final double side in [-1.0, 1.0]) {
+        final Offset eye = Offset(rxOff + side * 26.0 * squash, -54);
+        canvas.drawCircle(eye, 7, runeGlow);
+        canvas.drawCircle(eye, 5, runeCore);
+      }
+      canvas.drawCircle(Offset(rxOff, -32), 8, runeGlow);
+      canvas.drawCircle(Offset(rxOff, -32), 6, runeCore);
     }
-    canvas.drawCircle(const Offset(0, -32), 8, runeGlow);
-    canvas.drawCircle(const Offset(0, -32), 6, runeCore);
 
     for (int b = 0; b < 2; b++) {
-      final double angle = time * 2.4 + b * math.pi;
+      final double angle = time * 2.4 + b * math.pi - cameraYaw * math.pi / 180.0;
       final Offset bPos = Offset(
         math.cos(angle) * 76.0,
         -138.0 + math.sin(angle * 2.0) * 14.0,
@@ -3739,9 +3870,10 @@ class ZenValleyWorldPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
-    for (double side in [-1.0, 1.0]) {
+    for (final double cupAz in [-90.0, 90.0]) {
+      final double cRad = (cupAz - cameraYaw) * math.pi / 180.0;
       canvas.save();
-      canvas.translate(side * 78.0, -56.0);
+      canvas.translate(math.sin(cRad) * 78.0, -56.0 + math.cos(cRad) * 4.0);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           const Rect.fromLTWH(-10, -22, 20, 44),
@@ -3773,32 +3905,36 @@ class ZenValleyWorldPainter extends CustomPainter {
         ..strokeWidth = 1.8,
     );
 
-    canvas.save();
-    canvas.translate(74, -68);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(-10, -14, 20, 18),
-        const Radius.circular(4),
-      ),
-      Paint()..color = const Color(0xFF4DB6AC),
-    );
-    final Path steam = Path()
-      ..moveTo(0, -16)
-      ..quadraticBezierTo(
-        math.sin(time * 3.0) * 5.0,
-        -26,
-        math.cos(time * 2.5) * 4.0,
-        -36,
+    // 3D Orbiting Steaming Matcha Tea Cup on the meditation ledge (azimuth 65°)
+    final double teaRad = (65.0 - cameraYaw) * math.pi / 180.0;
+    if (math.cos(teaRad) > -0.2) {
+      canvas.save();
+      canvas.translate(math.sin(teaRad) * 70.0, -68 + math.cos(teaRad) * 6.0);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(-10, -14, 20, 18),
+          const Radius.circular(4),
+        ),
+        Paint()..color = const Color(0xFF4DB6AC),
       );
-    canvas.drawPath(
-      steam,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.65)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.restore();
+      final Path steam = Path()
+        ..moveTo(0, -16)
+        ..quadraticBezierTo(
+          math.sin(time * 3.0) * 5.0,
+          -26,
+          math.cos(time * 2.5) * 4.0,
+          -36,
+        );
+      canvas.drawPath(
+        steam,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.65)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.restore();
+    }
   }
 
   // ===========================================================================

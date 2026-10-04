@@ -4550,31 +4550,29 @@ class CologneChristmasWorldPainter extends CustomPainter {
     double horizonY,
     double groundHeight,
   ) {
-    final ui.Image? treeImg = CologneChristmasAssets.treePavilion;
-    if (treeImg != null) {
-      _drawPhotorealisticCenterTreeAndPavilion(canvas, size, treeImg);
-      return;
-    }
-
     final double cx = size.width * 0.5;
-    final double cy = size.height * 0.865;
-    final double pulseScale = 1.15 * (1.0 + coconutPulse * 0.06);
+    final double cy = size.height * 0.875;
+    final double pulseScale = 1.22 * (1.0 + coconutPulse * 0.06);
     final double sway = math.sin(time * 1.5) * 0.010;
+    final double yawRad = cameraYaw * math.pi / 180.0;
+    final double lightShiftX = math.sin(-yawRad) * 18.0;
 
     canvas.save();
     canvas.translate(cx, cy);
     canvas.scale(pulseScale, pulseScale);
 
-    // 1. Warm Golden-Amber Light Aura Cast by the Tree & Pavilion onto the Granite Plaza
+    // 1. Directional Ground Shadow & Warm Golden-Amber Light Aura on the Granite Plaza
+    final double shadowOffX = -math.sin(-yawRad) * 28.0;
+    final double shadowOffY = 10.0 + math.cos(-yawRad) * 7.0;
     canvas.save();
-    canvas.scale(2.4, 0.44);
+    canvas.scale(2.5, 0.42);
     canvas.drawCircle(
-      const Offset(0, 6),
-      84.0,
+      const Offset(0, 8),
+      88.0,
       Paint()
         ..shader = ui.Gradient.radial(
-          const Offset(0, 6),
-          84.0,
+          const Offset(0, 8),
+          88.0,
           [
             const Color(0xFFFFD54F).withValues(alpha: 0.45),
             const Color(0xFFFF8F00).withValues(alpha: 0.18),
@@ -4583,64 +4581,95 @@ class CologneChristmasWorldPainter extends CustomPainter {
           const [0.0, 0.55, 1.0],
         ),
     );
+    canvas.drawCircle(
+      Offset(shadowOffX * 0.4, shadowOffY),
+      54.0,
+      Paint()
+        ..shader = ui.Gradient.radial(
+          Offset(shadowOffX * 0.4, shadowOffY),
+          54.0,
+          [
+            Colors.black.withValues(alpha: 0.58),
+            Colors.black.withValues(alpha: 0.24),
+            Colors.transparent,
+          ],
+          const [0.0, 0.62, 1.0],
+        ),
+    );
     canvas.restore();
 
-    // 2. UPPER & MIDDLE NORDMANN FIR TREE CROWN (Rising out of the center of the Octagonal Pavilion, y = -28 up to -168!)
+    // 2. UPPER & MIDDLE 3D-ROTATING NORDMANN FIR TREE CROWN (y = -28 up to -172)
     canvas.save();
     canvas.rotate(sway);
 
-    // Warm golden glow halo enveloping the entire Christmas Tree (Photos 1 & 3!)
+    // Warm golden glow halo enveloping the entire Christmas Tree
     canvas.drawOval(
-      Rect.fromCenter(center: const Offset(0, -96), width: 128, height: 156),
+      Rect.fromCenter(center: const Offset(0, -98), width: 136, height: 164),
       Paint()
         ..shader = ui.Gradient.radial(
-          const Offset(0, -96),
-          82.0,
+          const Offset(0, -98),
+          86.0,
           [
-            const Color(0xFFFFE082).withValues(alpha: 0.34),
-            const Color(0xFFFFB300).withValues(alpha: 0.12),
+            const Color(0xFFFFE082).withValues(alpha: 0.36),
+            const Color(0xFFFFB300).withValues(alpha: 0.14),
             Colors.transparent,
           ],
           const [0.0, 0.58, 1.0],
         ),
     );
 
-    // 9 Dense, Feathered Natural Nordmann Fir Tiers with Hundreds of Warm Golden Micro-LEDs & Red/Gold Ornaments
+    // 9 Dense, Feathered Natural Nordmann Fir Tiers Rotating 360° in 3D with cameraYaw
     for (int tier = 0; tier < 9; tier++) {
       final double t = tier / 8.0;
-      final double tierBottomY = -28.0 - tier * 15.2;
-      final double tierTopY = tierBottomY - 28.0 + tier * 1.2;
-      final double halfWidth = 64.0 * (1.0 - t * 0.78);
+      final double tierBottomY = -28.0 - tier * 15.5;
+      final double tierTopY = tierBottomY - 29.0 + tier * 1.2;
+      final double halfWidth = 66.0 * (1.0 - t * 0.78);
 
-      // Deep interior pine shadow
+      // Deep interior pine shadow cone
       final Path shadowCone = Path()
         ..moveTo(0, tierTopY + 2)
-        ..lineTo(-halfWidth * 0.94, tierBottomY + 1)
-        ..lineTo(halfWidth * 0.94, tierBottomY + 1)
+        ..lineTo(-halfWidth * 0.95, tierBottomY + 1)
+        ..lineTo(halfWidth * 0.95, tierBottomY + 1)
         ..close();
       canvas.drawPath(shadowCone, Paint()..color = const Color(0xFF0E2914));
 
-      // Feathered Nordmann Fir branch boughs (Photo 2 natural evergreen silhouette!)
+      // 3D rotating bough tips around the conical tier
+      final List<double> tipXs = [];
+      const int branchCount = 12;
+      for (int b = 0; b < branchCount; b++) {
+        final double bRad =
+            (b * (360.0 / branchCount) + tier * 17.0 - cameraYaw) *
+                math.pi /
+                180.0;
+        if (math.cos(bRad) >= -0.20) {
+          tipXs.add(math.sin(bRad) * halfWidth);
+        }
+      }
+      tipXs
+        ..add(-halfWidth)
+        ..add(halfWidth)
+        ..sort();
+
       final Path bough = Path()..moveTo(0, tierTopY);
       bough.quadraticBezierTo(
-        -halfWidth * 0.52,
+        -halfWidth * 0.54,
         (tierTopY + tierBottomY) * 0.5,
-        -halfWidth,
+        tipXs.first,
         tierBottomY - 2,
       );
-      for (int s = 0; s < 7; s++) {
-        final double sx1 = -halfWidth + (s / 7.0) * (halfWidth * 2.0);
-        final double sx2 = -halfWidth + ((s + 1) / 7.0) * (halfWidth * 2.0);
+      for (int s = 0; s < tipXs.length - 1; s++) {
+        final double sx1 = tipXs[s];
+        final double sx2 = tipXs[s + 1];
         final double midX = (sx1 + sx2) * 0.5;
         bough.quadraticBezierTo(
           midX,
-          tierBottomY + 5.5,
+          tierBottomY + 5.8,
           sx2,
           tierBottomY - 1.8,
         );
       }
       bough.quadraticBezierTo(
-        halfWidth * 0.52,
+        halfWidth * 0.54,
         (tierTopY + tierBottomY) * 0.5,
         0,
         tierTopY,
@@ -4651,8 +4680,8 @@ class CologneChristmasWorldPainter extends CustomPainter {
         bough,
         Paint()
           ..shader = ui.Gradient.linear(
-            Offset(-halfWidth, tierBottomY),
-            Offset(halfWidth, tierBottomY),
+            Offset(-halfWidth + lightShiftX * 0.5, tierBottomY),
+            Offset(halfWidth + lightShiftX * 0.5, tierBottomY),
             const [
               Color(0xFF14381C),
               Color(0xFF21572A),
@@ -4664,16 +4693,39 @@ class CologneChristmasWorldPainter extends CustomPainter {
           ),
       );
 
-      // Dense carpet of warm golden fairy lights across every branch tier (Photos 1 & 3!)
-      final int bulbCount = 11 - tier;
-      for (int b = 0; b < bulbCount; b++) {
-        final double bt = (b + 0.5) / bulbCount;
-        final double bx = (bt - 0.5) * 2.0 * (halfWidth * 0.86);
+      // 3D rotating pine needle ridges from tier apex to front-hemisphere branch tips
+      for (int b = 0; b < branchCount; b++) {
+        final double bRad =
+            (b * (360.0 / branchCount) + tier * 17.0 - cameraYaw) *
+                math.pi /
+                180.0;
+        final double bCos = math.cos(bRad);
+        if (bCos <= 0.0) continue;
+        final double bx = math.sin(bRad) * (halfWidth * 0.90);
+        canvas.drawLine(
+          Offset(bx * 0.22, tierTopY + 4.0),
+          Offset(bx, tierBottomY - 1.0 + bCos * 2.5),
+          Paint()
+            ..color = const Color(0xFF43A047)
+                .withValues(alpha: (0.20 + 0.30 * bCos).clamp(0.0, 0.55))
+            ..strokeWidth = 1.4
+            ..strokeCap = StrokeCap.round,
+        );
+      }
+
+      // 3D Spiraling Golden Garland & Orbiting Fairy Lights / Ornaments on each tier
+      final int ringCount = 14 - tier;
+      for (int b = 0; b < ringCount; b++) {
+        final double bDeg =
+            b * (360.0 / ringCount) + tier * 24.0 - cameraYaw;
+        final double bRad = bDeg * math.pi / 180.0;
+        final double bCos = math.cos(bRad);
+        if (bCos < -0.10) continue; // cull back-of-tree lights
+
+        final double bx = math.sin(bRad) * (halfWidth * 0.86);
         final double by =
-            tierBottomY -
-            5.0 -
-            (b % 3) * 4.2 +
-            math.sin(bt * math.pi) * 3.5;
+            tierBottomY - 5.5 - (b % 2) * 3.5 + bCos * 4.2;
+        final double depthAlpha = (0.35 + 0.65 * bCos).clamp(0.0, 1.0);
         final double glowPulse =
             0.68 + 0.32 * math.sin(time * 4.5 + tier * 1.1 + b * 1.7);
 
@@ -4688,18 +4740,18 @@ class CologneChristmasWorldPainter extends CustomPainter {
 
         canvas.drawCircle(
           Offset(bx, by),
-          4.0 * glowPulse,
-          Paint()..color = lightColor.withValues(alpha: 0.42),
+          4.2 * glowPulse,
+          Paint()..color = lightColor.withValues(alpha: 0.42 * depthAlpha),
         );
         canvas.drawCircle(
           Offset(bx, by),
-          1.6,
-          Paint()..color = lightColor,
+          1.65,
+          Paint()..color = lightColor.withValues(alpha: depthAlpha),
         );
 
-        // Red and Gold Ornaments on the branches (visible in Photo 2!)
-        if ((b + tier) % 2 == 0) {
-          final Offset baublePos = Offset(bx + 2.5, by + 3.5);
+        // Red & Gold Ornaments, Lebkuchen Hearts, or Royal Velvet Bows orbiting in 3D
+        if ((b + tier) % 2 == 0 && bCos > 0.05) {
+          final Offset baublePos = Offset(bx, by + 3.8);
           if (styleMode == CoconutStyleMode.cocktail) {
             _drawLebkuchenHeartOrnament(canvas, baublePos);
           } else if (styleMode == CoconutStyleMode.king) {
@@ -4708,142 +4760,216 @@ class CologneChristmasWorldPainter extends CustomPainter {
             final Color bc = (tier + b) % 3 == 0
                 ? const Color(0xFFFFB300)
                 : const Color(0xFFD32F2F);
-            canvas.drawCircle(baublePos, 3.2, Paint()..color = bc);
+            canvas.drawCircle(
+              baublePos,
+              3.3 * (0.85 + 0.15 * bCos),
+              Paint()..color = bc,
+            );
             canvas.drawCircle(
               Offset(baublePos.dx - 1.0, baublePos.dy - 1.0),
               1.0,
-              Paint()..color = Colors.white.withValues(alpha: 0.80),
+              Paint()..color = Colors.white.withValues(alpha: 0.82),
             );
           }
         }
       }
     }
 
-    // Steel Sternenzelt Anchor Ring near the upper tree crown (Photo 2!)
+    // Continuous 3D Golden Tinsel Garland spiraling from top to bottom of the fir tree
+    for (int g = 0; g < 42; g++) {
+      final double gt0 = g / 42.0;
+      final double gt1 = (g + 1) / 42.0;
+      final double ga0 = gt0 * math.pi * 8.0 - yawRad;
+      final double ga1 = gt1 * math.pi * 8.0 - yawRad;
+      if (math.cos(ga0) < 0.0 || math.cos(ga1) < 0.0) continue;
+      final double gr0 = 14.0 + gt0 * 48.0;
+      final double gr1 = 14.0 + gt1 * 48.0;
+      final double gy0 = -152.0 + gt0 * 120.0 + math.cos(ga0) * 3.5;
+      final double gy1 = -152.0 + gt1 * 120.0 + math.cos(ga1) * 3.5;
+      canvas.drawLine(
+        Offset(math.sin(ga0) * gr0, gy0),
+        Offset(math.sin(ga1) * gr1, gy1),
+        Paint()
+          ..color = const Color(0xFFFFD54F).withValues(alpha: 0.65)
+          ..strokeWidth = 1.8
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // Steel Sternenzelt Anchor Ring near the upper tree crown with 8 rotating cable lugs
     canvas.drawOval(
-      Rect.fromCenter(center: const Offset(0, -148), width: 30, height: 6.5),
+      Rect.fromCenter(center: const Offset(0, -150), width: 30, height: 6.5),
       Paint()
         ..color = const Color(0xFFFFD54F)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.6,
     );
+    for (int c = 0; c < 8; c++) {
+      final double cRad = (c * 45.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(cRad) < -0.2) continue;
+      canvas.drawCircle(
+        Offset(math.sin(cRad) * 15.0, -150.0 + math.cos(cRad) * 3.2),
+        1.5,
+        Paint()..color = const Color(0xFFFFF59D),
+      );
+    }
 
-    // Style-Specific Tree Topper & Accessories (Topper at y = -168)
+    // Style-Specific Tree Topper & 3D Rotating Accessories (Topper at y = -170)
     _drawStyleSpecificTreeFeatures(canvas);
 
     canvas.restore(); // end tree crown sway
 
-    // 3. THE AUTHENTIC OCTAGONAL RED-ROOFED TREE PAVILION BASE (`Baum-Pavillon / Rondell` from Photo 2 & Stage from Photos 1 & 3!)
-    //    Encircles the base of our Christmas Tree (y = -34 down to +14), grounding it 100% into the Roncalliplatz market!
+    // 3. THE AUTHENTIC 3D-ROTATING OCTAGONAL RED-ROOFED TREE PAVILION BASE (`Baum-Pavillon`)
     _drawTreeBaseOctagonalPavilion(canvas);
 
     canvas.restore();
   }
 
   void _drawTreeBaseOctagonalPavilion(Canvas canvas) {
-    // Octagonal wooden pavilion walls (3 visible facets: Left-Angled, Center-Front, Right-Angled — exact match to Photo 2!)
     const double baseBottomY = 12.0;
     const double counterY = -8.0;
     const double eavesY = -28.0;
+    const double octRadius = 56.0;
 
-    final Paint darkTimberPaint = Paint()..color = const Color(0xFF3E2723);
-    final Paint creamPanelPaint = Paint()..color = const Color(0xFFEFEBE4);
-
-    // Left Facet (-54 to -22)
-    final Path leftWall = Path()
-      ..moveTo(-54, baseBottomY - 6)
-      ..lineTo(-22, baseBottomY)
-      ..lineTo(-22, eavesY)
-      ..lineTo(-54, eavesY - 4)
-      ..close();
-    canvas.drawPath(leftWall, darkTimberPaint);
-
-    // Center Front Facet (-22 to +22)
-    final Rect centerWall = Rect.fromLTRB(-22, eavesY, 22, baseBottomY);
-    canvas.drawRect(centerWall, darkTimberPaint);
-
-    // Right Facet (+22 to +54)
-    final Path rightWall = Path()
-      ..moveTo(22, baseBottomY)
-      ..lineTo(54, baseBottomY - 6)
-      ..lineTo(54, eavesY - 4)
-      ..lineTo(22, eavesY)
-      ..close();
-    canvas.drawPath(rightWall, darkTimberPaint);
-
-    // Cream-white lower wainscoting panels on all 3 visible facets (Photo 2!)
-    for (final Rect panel in const [
-      Rect.fromLTRB(-49, counterY + 2, -25, baseBottomY - 4),
-      Rect.fromLTRB(-19, counterY + 3, 19, baseBottomY - 2),
-      Rect.fromLTRB(25, counterY + 2, 49, baseBottomY - 4),
-    ]) {
-      canvas.drawRect(panel, creamPanelPaint);
-      canvas.drawRect(
-        panel.deflate(2.0),
-        Paint()
-          ..color = const Color(0xFF4E342E)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.0,
-      );
-    }
-
-    // Warm Illuminated Display Windows on Left, Center & Right Facets (Photo 2!)
-    for (final Rect win in const [
-      Rect.fromLTRB(-48, eavesY + 4, -25, counterY - 1),
-      Rect.fromLTRB(-18, eavesY + 4, 18, counterY - 1),
-      Rect.fromLTRB(25, eavesY + 4, 48, counterY - 1),
-    ]) {
-      canvas.drawRect(
-        win,
-        Paint()
-          ..shader = ui.Gradient.linear(
-            win.topCenter,
-            win.bottomCenter,
-            const [Color(0xFFFFF9C4), Color(0xFFFFCA28)],
-          ),
-      );
-      // Red velvet & jewelry/ornament display shelves inside the windows (Photo 2!)
-      canvas.drawRect(
-        Rect.fromLTRB(win.left + 2, win.bottom - 5, win.right - 2, win.bottom),
-        Paint()..color = const Color(0xFFB71C1C),
-      );
-      for (double dx = win.left + 5; dx < win.right - 4; dx += 6.5) {
-        canvas.drawCircle(
-          Offset(dx, win.center.dy - 1),
-          1.8,
-          Paint()..color = const Color(0xFF263238),
-        );
-      }
-    }
-
-    // White/Cream Counter Ledge wrapping around the 3 facets
-    final Path counterLedge = Path()
-      ..moveTo(-56, counterY - 2)
-      ..lineTo(-22, counterY)
-      ..lineTo(22, counterY)
-      ..lineTo(56, counterY - 2);
-    canvas.drawPath(
-      counterLedge,
-      Paint()
-        ..color = const Color(0xFFF5F0E6)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.6,
+    // Project all 8 octagonal vertices in 3D as cameraYaw rotates
+    final List<double> vAngles = List.generate(
+      8,
+      (i) => (i * 45.0 - 22.5 - cameraYaw) * math.pi / 180.0,
     );
 
-    // Iconic Scalloped / Zig-Zagging Bright Crimson-Red Crown Roof (`Gezacktes Rotes Zeltdach`, Photo 2!)
-    final Path crownRoof = Path()
-      ..moveTo(-62, eavesY - 4)
-      ..lineTo(-40, eavesY - 18)
-      ..lineTo(-22, eavesY - 3)
-      ..lineTo(0, eavesY - 22)
-      ..lineTo(22, eavesY - 3)
-      ..lineTo(40, eavesY - 18)
-      ..lineTo(62, eavesY - 4)
-      ..lineTo(42, eavesY - 30)
-      ..lineTo(-42, eavesY - 30)
+    // Collect front-facing octagonal wall facets (where facet normal cos > -0.15)
+    final List<(int, double, double, double)> visibleFacets = [];
+    for (int f = 0; f < 8; f++) {
+      final double a0 = vAngles[f];
+      final double a1 = vAngles[(f + 1) % 8];
+      final double midRad = (f * 45.0 - cameraYaw) * math.pi / 180.0;
+      final double midCos = math.cos(midRad);
+      if (midCos > -0.05) {
+        visibleFacets.add((f, midCos, a0, a1));
+      }
+    }
+    // Sort facets back-to-front by midCos
+    visibleFacets.sort((a, b) => a.$2.compareTo(b.$2));
+
+    for (final (int fIdx, double midCos, double a0, double a1)
+        in visibleFacets) {
+      final double x0 = math.sin(a0) * octRadius;
+      final double x1 = math.sin(a1) * octRadius;
+      final double leftX = math.min(x0, x1);
+      final double rightX = math.max(x0, x1);
+      final double facetW = rightX - leftX;
+      if (facetW < 3.0) continue;
+
+      final double yDrop0 = (1.0 - math.cos(a0)) * 4.5;
+      final double yDrop1 = (1.0 - math.cos(a1)) * 4.5;
+      final double leftDrop = x0 < x1 ? yDrop0 : yDrop1;
+      final double rightDrop = x0 < x1 ? yDrop1 : yDrop0;
+
+      // Dark timber wall polygon for this octagonal facet
+      final Color timberColor = Color.lerp(
+        const Color(0xFF271714),
+        const Color(0xFF4A2F29),
+        midCos.clamp(0.0, 1.0),
+      )!;
+      final Path wallPath = Path()
+        ..moveTo(leftX, baseBottomY - leftDrop)
+        ..lineTo(rightX, baseBottomY - rightDrop)
+        ..lineTo(rightX, eavesY - rightDrop * 0.6)
+        ..lineTo(leftX, eavesY - leftDrop * 0.6)
+        ..close();
+      canvas.drawPath(wallPath, Paint()..color = timberColor);
+      canvas.drawPath(
+        wallPath,
+        Paint()
+          ..color = const Color(0xFF1B0F0D)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.1,
+      );
+
+      if (facetW > 8.0) {
+        final double padX = (facetW * 0.12).clamp(1.5, 4.0);
+        final double avgDrop = (leftDrop + rightDrop) * 0.5;
+
+        // Cream-white lower wainscoting panel
+        final Rect panelRect = Rect.fromLTRB(
+          leftX + padX,
+          counterY + 2.5 - avgDrop * 0.7,
+          rightX - padX,
+          baseBottomY - 3.0 - avgDrop,
+        );
+        canvas.drawRect(panelRect, Paint()..color = const Color(0xFFEFEBE4));
+        if (facetW > 14.0) {
+          canvas.drawRect(
+            panelRect.deflate(1.6),
+            Paint()
+              ..color = const Color(0xFF4E342E)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 0.9,
+          );
+        }
+
+        // Warm illuminated display window on this facet
+        final Rect winRect = Rect.fromLTRB(
+          leftX + padX,
+          eavesY + 4.0 - avgDrop * 0.6,
+          rightX - padX,
+          counterY - 1.2 - avgDrop * 0.7,
+        );
+        canvas.drawRect(
+          winRect,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              winRect.topCenter,
+              winRect.bottomCenter,
+              const [Color(0xFFFFF9C4), Color(0xFFFFCA28)],
+            ),
+        );
+        // Red velvet display shelf inside the window
+        canvas.drawRect(
+          Rect.fromLTRB(
+            winRect.left + 1.0,
+            winRect.bottom - 4.5,
+            winRect.right - 1.0,
+            winRect.bottom,
+          ),
+          Paint()..color = const Color(0xFFB71C1C),
+        );
+        // Miniature ornaments/crafts on display inside the rotating window
+        for (double dx = winRect.left + 4.0;
+            dx < winRect.right - 3.0;
+            dx += 6.0) {
+          canvas.drawCircle(
+            Offset(dx, winRect.center.dy - 1.0),
+            1.6,
+            Paint()
+              ..color = fIdx.isEven
+                  ? const Color(0xFF263238)
+                  : const Color(0xFFD32F2F),
+          );
+        }
+      }
+
+      // White/Cream counter ledge segment for this facet
+      canvas.drawLine(
+        Offset(leftX - 1.0, counterY - leftDrop * 0.7),
+        Offset(rightX + 1.0, counterY - rightDrop * 0.7),
+        Paint()
+          ..color = const Color(0xFFF5F0E6)
+          ..strokeWidth = 2.6
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // 3D Rotating Scalloped / Zig-Zagging Bright Crimson-Red Crown Roof (`Gezacktes Rotes Zeltdach`)
+    // Each of the 8 facets has a gable peak at its center angle (f * 45° - cameraYaw)
+    final Path roofBaseCone = Path()
+      ..moveTo(-octRadius * 1.04, eavesY - 4)
+      ..lineTo(-octRadius * 0.72, eavesY - 30)
+      ..lineTo(octRadius * 0.72, eavesY - 30)
+      ..lineTo(octRadius * 1.04, eavesY - 4)
       ..close();
     canvas.drawPath(
-      crownRoof,
+      roofBaseCone,
       Paint()
         ..shader = ui.Gradient.linear(
           const Offset(0, eavesY - 30),
@@ -4853,42 +4979,72 @@ class CologneChristmasWorldPainter extends CustomPainter {
         ),
     );
 
-    // Lush Green Pine Garland (`Tannengirlande`) with Twinkling Lights tracing the Zig-ZagGable Eaves (Photo 2!)
-    final Path zigZagGarland = Path()
-      ..moveTo(-62, eavesY - 4)
-      ..lineTo(-40, eavesY - 18)
-      ..lineTo(-22, eavesY - 3)
-      ..lineTo(0, eavesY - 22)
-      ..lineTo(22, eavesY - 3)
-      ..lineTo(40, eavesY - 18)
-      ..lineTo(62, eavesY - 4);
-    canvas.drawPath(
-      zigZagGarland,
-      Paint()
-        ..color = const Color(0xFF1B4D20)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.8
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
+    for (final (int fIdx, double midCos, double a0, double a1)
+        in visibleFacets) {
+      final double midRad = (fIdx * 45.0 - cameraYaw) * math.pi / 180.0;
+      final double x0 = math.sin(a0) * (octRadius * 1.06);
+      final double x1 = math.sin(a1) * (octRadius * 1.06);
+      final double peakX = math.sin(midRad) * (octRadius * 0.96);
+      final double peakY = eavesY - 21.0 - midCos * 3.0;
+      final double valleyY0 = eavesY - 3.5 - math.cos(a0) * 2.0;
+      final double valleyY1 = eavesY - 3.5 - math.cos(a1) * 2.0;
 
-    // Glowing 3D Yellow-Orange Moravian Stars (`Herrnhuter Sterne`) on every peak of the pavilion roof (Photo 2!)
-    _drawHerrnhuterStar(canvas, const Offset(-40, eavesY - 20), 4.5);
-    _drawHerrnhuterStar(canvas, const Offset(0, eavesY - 25), 5.5);
-    _drawHerrnhuterStar(canvas, const Offset(40, eavesY - 20), 4.5);
+      // Crimson gable triangle facet
+      final Path gable = Path()
+        ..moveTo(x0, valleyY0)
+        ..lineTo(peakX, peakY)
+        ..lineTo(x1, valleyY1)
+        ..close();
+      canvas.drawPath(
+        gable,
+        Paint()
+          ..color = Color.lerp(
+            const Color(0xFFB71C1C),
+            const Color(0xFFFF1744),
+            midCos.clamp(0.0, 1.0),
+          )!,
+      );
 
-    // Yellow Star Sign Plaque under the center gable peak (Photo 2!)
-    final RRect centerBadge = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: const Offset(0, eavesY + 2),
-        width: 24,
-        height: 5.5,
-      ),
-      const Radius.circular(2),
-    );
-    canvas.drawRRect(centerBadge, Paint()..color = const Color(0xFFE6B84C));
+      // Lush green pine garland (`Tannengirlande`) tracing the rotating gable eaves
+      final Path garland = Path()
+        ..moveTo(x0, valleyY0)
+        ..lineTo(peakX, peakY)
+        ..lineTo(x1, valleyY1);
+      canvas.drawPath(
+        garland,
+        Paint()
+          ..color = const Color(0xFF1B4D20)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.5
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
 
-    // Festive Gifts & Nutcracker Guards arranged around the front base of the Pavilion
+      // Glowing 3D Yellow-Orange Moravian Star (`Herrnhuter Stern`) on each rotating gable peak
+      _drawHerrnhuterStar(
+        canvas,
+        Offset(peakX, peakY - 2.5),
+        4.2 + 1.4 * midCos.clamp(0.0, 1.0),
+      );
+
+      // Golden plaque on alternating facets
+      if (fIdx.isEven && midCos > 0.35) {
+        final double badgeW = 22.0 * midCos;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: Offset(peakX, eavesY + 1.5),
+              width: badgeW,
+              height: 5.0,
+            ),
+            const Radius.circular(2),
+          ),
+          Paint()..color = const Color(0xFFE6B84C),
+        );
+      }
+    }
+
+    // 3D Orbiting Festive Gifts & Nutcracker Guards around the base of the Pavilion
     _drawTreeBaseGiftsAndToys(canvas);
   }
 
@@ -4925,7 +5081,10 @@ class CologneChristmasWorldPainter extends CustomPainter {
   }
 
   void _drawStyleSpecificTreeFeatures(Canvas canvas) {
-    const Offset topperPos = Offset(0, -168);
+    const Offset topperPos = Offset(0, -170);
+    final double yawRad = cameraYaw * math.pi / 180.0;
+    final double fSin = math.sin(-yawRad);
+    final double fCos = math.cos(-yawRad);
 
     canvas.drawCircle(
       topperPos,
@@ -4944,16 +5103,18 @@ class CologneChristmasWorldPainter extends CustomPainter {
     );
 
     if (styleMode == CoconutStyleMode.arcade) {
+      // Santa hat with pom-pom rotating 360° in 3D
+      final double pomX = math.sin((65.0 - cameraYaw) * math.pi / 180.0) * 23.0;
       final Path santaHat = Path()
-        ..moveTo(-18, -150)
-        ..quadraticBezierTo(-2, -180, 22, -158)
-        ..lineTo(14, -150)
+        ..moveTo(-18, -152)
+        ..quadraticBezierTo(pomX * 0.2, -182, pomX, -160)
+        ..lineTo(14, -152)
         ..close();
       canvas.drawPath(santaHat, Paint()..color = const Color(0xFFD32F2F));
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
-            center: const Offset(-1, -149),
+            center: const Offset(0, -151),
             width: 38,
             height: 7,
           ),
@@ -4962,48 +5123,75 @@ class CologneChristmasWorldPainter extends CustomPainter {
         Paint()..color = Colors.white,
       );
       canvas.drawCircle(
-        const Offset(23, -158),
+        Offset(pomX, -160),
         5.5,
         Paint()..color = Colors.white,
       );
 
-      final Paint framePaint = Paint()..color = const Color(0xFF111111);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: const Offset(-12, -108), width: 20, height: 11),
-          const Radius.circular(2),
-        ),
-        framePaint,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: const Offset(12, -108), width: 20, height: 11),
-          const Radius.circular(2),
-        ),
-        framePaint,
-      );
-      canvas.drawRect(
-        Rect.fromCenter(center: const Offset(0, -109), width: 8, height: 3),
-        framePaint,
-      );
+      // 8-bit pixel sunglasses rotating across the front hemisphere of the tree
+      if (fCos > -0.15) {
+        final double gx = fSin * 16.0;
+        final double gScaleX = fCos.clamp(0.25, 1.0);
+        canvas.save();
+        canvas.translate(gx, -108);
+        canvas.scale(gScaleX, 1.0);
+        final Paint framePaint = Paint()..color = const Color(0xFF111111);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: const Offset(-12, 0),
+              width: 20,
+              height: 11,
+            ),
+            const Radius.circular(2),
+          ),
+          framePaint,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(center: const Offset(12, 0), width: 20, height: 11),
+            const Radius.circular(2),
+          ),
+          framePaint,
+        );
+        canvas.drawRect(
+          Rect.fromCenter(center: const Offset(0, -1), width: 8, height: 3),
+          framePaint,
+        );
+        canvas.restore();
+      }
     } else if (styleMode == CoconutStyleMode.king) {
-      final Path crown = Path()
-        ..moveTo(-14, -156)
-        ..lineTo(-17, -172)
-        ..lineTo(-7, -163)
-        ..lineTo(0, -176)
-        ..lineTo(7, -163)
-        ..lineTo(17, -172)
-        ..lineTo(14, -156)
-        ..close();
-      canvas.drawPath(crown, Paint()..color = const Color(0xFFFFD54F));
+      // 3D rotating 6-pointed royal golden crown topper
+      canvas.drawRect(
+        Rect.fromCenter(center: const Offset(0, -159), width: 28, height: 6),
+        Paint()..color = const Color(0xFFFFD54F),
+      );
+      for (int p = 0; p < 6; p++) {
+        final double pRad = (p * 60.0 - cameraYaw) * math.pi / 180.0;
+        if (math.cos(pRad) < -0.2) continue;
+        final double px = math.sin(pRad) * 14.0;
+        canvas.drawPath(
+          Path()
+            ..moveTo(px - 4.0, -162)
+            ..lineTo(px, -176)
+            ..lineTo(px + 4.0, -162)
+            ..close(),
+          Paint()..color = const Color(0xFFFFD54F),
+        );
+      }
     } else {
       _drawHerrnhuterStar(canvas, topperPos, 15.5);
     }
 
     if (styleMode == CoconutStyleMode.lofi) {
+      final double bandWidth =
+          (76.0 * math.cos(yawRad).abs()).clamp(22.0, 76.0);
       canvas.drawArc(
-        Rect.fromCenter(center: const Offset(0, -96), width: 76, height: 52),
+        Rect.fromCenter(
+          center: const Offset(0, -96),
+          width: bandWidth,
+          height: 52,
+        ),
         math.pi * 0.95,
         math.pi * 1.10,
         false,
@@ -5012,11 +5200,14 @@ class CologneChristmasWorldPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 4.2,
       );
-      for (final double side in [-1.0, 1.0]) {
+      for (final double earDeg in [270.0, 90.0]) {
+        final double eRad = earDeg * math.pi / 180.0 - yawRad;
+        final double ex = math.sin(eRad) * 38.0;
+        final double ey = -92.0 + math.cos(eRad) * 3.0;
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             Rect.fromCenter(
-              center: Offset(side * 38, -92),
+              center: Offset(ex, ey),
               width: 10.5,
               height: 20,
             ),
@@ -5029,38 +5220,30 @@ class CologneChristmasWorldPainter extends CustomPainter {
   }
 
   void _drawTreeBaseGiftsAndToys(Canvas canvas) {
-    final List<(Offset, Size, Color, Color)> gifts = [
-      (
-        const Offset(-48, 12),
-        const Size(15, 12),
-        const Color(0xFFD32F2F),
-        const Color(0xFFFFD54F),
-      ),
-      (
-        const Offset(-31, 15),
-        const Size(13, 10),
-        const Color(0xFF1976D2),
-        const Color(0xFFFFF59D),
-      ),
-      (
-        const Offset(31, 15),
-        const Size(14, 11),
-        const Color(0xFF388E3C),
-        const Color(0xFFFF5252),
-      ),
-      (
-        const Offset(48, 12),
-        const Size(16, 13),
-        const Color(0xFF8E24AA),
-        const Color(0xFFFFD54F),
-      ),
+    // 8 Festive Wrapped Christmas Gifts orbiting 360° around the Octagonal Pavilion base
+    const List<(double, Size, Color, Color)> giftSpecs = [
+      (305.0, Size(15, 12), Color(0xFFD32F2F), Color(0xFFFFD54F)),
+      (332.0, Size(13, 10), Color(0xFF1976D2), Color(0xFFFFF59D)),
+      (28.0, Size(14, 11), Color(0xFF388E3C), Color(0xFFFF5252)),
+      (55.0, Size(16, 13), Color(0xFF8E24AA), Color(0xFFFFD54F)),
+      (125.0, Size(15, 11), Color(0xFFD32F2F), Color(0xFFFFF59D)),
+      (160.0, Size(13, 10), Color(0xFF1976D2), Color(0xFFFFD54F)),
+      (205.0, Size(14, 12), Color(0xFF388E3C), Color(0xFFFFD54F)),
+      (245.0, Size(15, 11), Color(0xFF8E24AA), Color(0xFFFF5252)),
     ];
 
-    for (final (pos, boxSize, boxColor, ribbonColor) in gifts) {
+    for (final (double deg, Size boxSize, Color boxColor, Color ribbonColor)
+        in giftSpecs) {
+      final double gRad = (deg - cameraYaw) * math.pi / 180.0;
+      final double gCos = math.cos(gRad);
+      if (gCos < 0.05) continue; // visible in front of the octagonal pavilion
+      final double gx = math.sin(gRad) * 58.0;
+      final double gy = 11.0 + gCos * 5.0;
+      final double scale = 0.88 + 0.14 * gCos;
       final Rect r = Rect.fromCenter(
-        center: Offset(pos.dx, pos.dy - boxSize.height * 0.5),
-        width: boxSize.width,
-        height: boxSize.height,
+        center: Offset(gx, gy - boxSize.height * 0.5 * scale),
+        width: boxSize.width * scale,
+        height: boxSize.height * scale,
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(r, const Radius.circular(2.0)),
@@ -5068,7 +5251,7 @@ class CologneChristmasWorldPainter extends CustomPainter {
       );
       final Paint rib = Paint()
         ..color = ribbonColor
-        ..strokeWidth = 1.8;
+        ..strokeWidth = 1.8 * scale;
       canvas.drawLine(
         Offset(r.center.dx, r.top),
         Offset(r.center.dx, r.bottom),
@@ -5081,11 +5264,17 @@ class CologneChristmasWorldPainter extends CustomPainter {
       );
     }
 
-    final List<double> nutcrackerX = styleMode == CoconutStyleMode.king
-        ? [-62.0, 62.0]
-        : [62.0];
-    for (final double nx in nutcrackerX) {
-      _drawNutcrackerSoldier(canvas, Offset(nx, 10));
+    // Orbiting Nutcracker Soldiers guarding the pavilion perimeter in 3D
+    final List<double> nutcrackerAngles = styleMode == CoconutStyleMode.king
+        ? [285.0, 75.0, 165.0, 225.0]
+        : [75.0, 255.0];
+    for (final double nDeg in nutcrackerAngles) {
+      final double nRad = (nDeg - cameraYaw) * math.pi / 180.0;
+      final double nCos = math.cos(nRad);
+      if (nCos < 0.0) continue;
+      final double nx = math.sin(nRad) * 66.0;
+      final double ny = 10.0 + nCos * 4.5;
+      _drawNutcrackerSoldier(canvas, Offset(nx, ny));
     }
   }
 
@@ -5125,146 +5314,6 @@ class CologneChristmasWorldPainter extends CustomPainter {
       ),
       Paint()..color = const Color(0xFF212121),
     );
-  }
-
-  void _drawPhotorealisticCenterTreeAndPavilion(
-    Canvas canvas,
-    Size size,
-    ui.Image treeImg,
-  ) {
-    final double cx = size.width * 0.5;
-    final double cy = size.height * 0.885;
-    final double pulseScale = 1.32 * (1.0 + coconutPulse * 0.06);
-    final double sway = math.sin(time * 1.5) * 0.007;
-
-    canvas.save();
-    canvas.translate(cx, cy);
-    canvas.scale(pulseScale, pulseScale);
-
-    // 1. Soft Photographic Ground Ambient Occlusion & Warm Golden Light Reflection on the Plaza
-    canvas.save();
-    canvas.scale(2.7, 0.36);
-    canvas.drawCircle(
-      const Offset(0, 18),
-      92.0,
-      Paint()
-        ..shader = ui.Gradient.radial(
-          const Offset(0, 18),
-          92.0,
-          [
-            const Color(0xFFFFD54F).withValues(alpha: 0.38),
-            const Color(0xFFFF8F00).withValues(alpha: 0.16),
-            Colors.transparent,
-          ],
-          const [0.0, 0.55, 1.0],
-        ),
-    );
-    canvas.drawCircle(
-      const Offset(0, 14),
-      56.0,
-      Paint()
-        ..shader = ui.Gradient.radial(
-          const Offset(0, 14),
-          56.0,
-          [
-            Colors.black.withValues(alpha: 0.62),
-            Colors.black.withValues(alpha: 0.28),
-            Colors.transparent,
-          ],
-          const [0.0, 0.62, 1.0],
-        ),
-    );
-    canvas.restore();
-
-    // 2. Radiant Golden Halo behind the 25m Nordmann Fir Crown
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(0, -118), width: 170, height: 200),
-      Paint()
-        ..shader = ui.Gradient.radial(
-          const Offset(0, -118),
-          100.0,
-          [
-            const Color(0xFFFFE082).withValues(alpha: 0.28),
-            const Color(0xFFFFB300).withValues(alpha: 0.10),
-            Colors.transparent,
-          ],
-          const [0.0, 0.60, 1.0],
-        ),
-    );
-
-    // 3. Photorealistic Cologne Christmas Tree + Octagonal Red-Roofed Wooden Pavilion (`Baum-Pavillon`)
-    canvas.save();
-    canvas.rotate(sway * 0.45);
-    final Rect srcRect = Rect.fromLTWH(
-      0,
-      0,
-      treeImg.width.toDouble(),
-      treeImg.height.toDouble(),
-    );
-    const Rect dstRect = Rect.fromLTRB(-136.0, -242.0, 136.0, 18.0);
-    canvas.drawImageRect(
-      treeImg,
-      srcRect,
-      dstRect,
-      Paint()..filterQuality = FilterQuality.medium,
-    );
-
-    // 4. Live 60 FPS Twinkling Micro-LED Sparkles & Style Ornaments across the Photorealistic Tree
-    for (int tier = 0; tier < 8; tier++) {
-      final double t = tier / 7.0;
-      final double y = -56.0 - tier * 20.5;
-      final double halfW = 64.0 * (1.0 - t * 0.76);
-      final int count = 9 - tier;
-      for (int b = 0; b < count; b++) {
-        final double bt = (b + 0.5) / count;
-        final double bx = (bt - 0.5) * 2.0 * halfW;
-        final double by = y + math.sin(bt * math.pi + tier) * 4.0;
-        final double pulse =
-            0.45 + 0.55 * math.sin(time * 4.8 + tier * 1.3 + b * 1.9);
-
-        final Color bulbCol = styleMode == CoconutStyleMode.cocktail
-            ? [
-                const Color(0xFFFF4081),
-                const Color(0xFF00E5FF),
-                const Color(0xFFFFEE58),
-                const Color(0xFF69F0AE),
-              ][(tier + b) % 4]
-            : const Color(0xFFFFF59D);
-
-        if (pulse > 0.62 || styleMode == CoconutStyleMode.cocktail) {
-          canvas.drawCircle(
-            Offset(bx, by),
-            3.2 * pulse,
-            Paint()..color = bulbCol.withValues(alpha: 0.48 * pulse),
-          );
-          canvas.drawCircle(
-            Offset(bx, by),
-            1.2,
-            Paint()..color = bulbCol.withValues(alpha: 0.92),
-          );
-        }
-
-        if ((tier + b) % 3 == 0) {
-          if (styleMode == CoconutStyleMode.cocktail) {
-            _drawLebkuchenHeartOrnament(canvas, Offset(bx + 2.0, by + 3.0));
-          } else if (styleMode == CoconutStyleMode.king) {
-            _drawRoyalVelvetBow(canvas, Offset(bx + 2.0, by + 3.0));
-          }
-        }
-      }
-    }
-
-    // 5. Interactive Style Mode Accessories on the Photorealistic Tree
-    if (styleMode != CoconutStyleMode.natural) {
-      canvas.save();
-      canvas.translate(0, -64.0);
-      _drawStyleSpecificTreeFeatures(canvas);
-      canvas.restore();
-      _drawTreeBaseGiftsAndToys(canvas);
-    }
-    canvas.restore();
-
-    canvas.restore();
   }
 
   // ===========================================================================

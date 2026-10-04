@@ -3121,7 +3121,136 @@ class StreetLampWorldPainter extends CustomPainter {
         ? const Color(0xFFFFF59D)
         : const Color(0xFF546E7A);
 
-    // 2. Fluted Octagonal Cast-Iron Pedestal Base & Column
+    // Dynamic light direction on the 3D lamp as cameraYaw rotates
+    final double lightDirX =
+        math.sin(-cameraYaw * math.pi / 180.0).clamp(-1.0, 1.0);
+
+    // Seamless Cobblestone Curbing Socket & 3D Rotating Embedded Plaza Stones
+    final Color plazaStoneDark = switch (atmosphereMode) {
+      CoconutAtmosphereMode.sunset => const Color(0xFF1E192B),
+      CoconutAtmosphereMode.night => const Color(0xFF131624),
+      CoconutAtmosphereMode.noon => const Color(0xFF3E3A4B),
+      CoconutAtmosphereMode.rain => const Color(0xFF171C28),
+    };
+    final Color plazaStoneMid = switch (atmosphereMode) {
+      CoconutAtmosphereMode.sunset => const Color(0xFF2B243A),
+      CoconutAtmosphereMode.night => const Color(0xFF1D2236),
+      CoconutAtmosphereMode.noon => const Color(0xFF524D63),
+      CoconutAtmosphereMode.rain => const Color(0xFF242B3D),
+    };
+    final Path curbSocket = Path()
+      ..moveTo(-68, 12)
+      ..quadraticBezierTo(-36, -3, 0, 1)
+      ..quadraticBezierTo(36, -3, 68, 12)
+      ..quadraticBezierTo(42, 25, 0, 23)
+      ..quadraticBezierTo(-42, 25, -68, 12)
+      ..close();
+    canvas.drawPath(curbSocket, Paint()..color = plazaStoneMid);
+
+    // 12 radial granite cobblestones orbiting 360° around the lamp curb
+    for (int s = 0; s < 12; s++) {
+      final double sRad = (s * 30.0 - cameraYaw) * math.pi / 180.0;
+      final double sx = math.sin(sRad) * 48.0;
+      final double sy = 10.0 + math.cos(sRad) * 9.5;
+      final double sWidth = 6.5 + 4.5 * math.cos(sRad).abs();
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(sx, sy), width: sWidth, height: 5.2),
+          const Radius.circular(2),
+        ),
+        Paint()..color = s.isEven ? plazaStoneDark : plazaStoneMid,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(sx, sy), width: sWidth, height: 5.2),
+          const Radius.circular(2),
+        ),
+        Paint()
+          ..color = poolCore.withValues(alpha: 0.28)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.9,
+      );
+    }
+
+    // Fallen autumn sycamore leaves orbiting 360° on the curb
+    const List<(double, double, Color)> leafRing = [
+      (25.0, 56.0, Color(0xFFD84315)),
+      (78.0, 42.0, Color(0xFFFF8F00)),
+      (145.0, 58.0, Color(0xFFEF6C00)),
+      (215.0, 46.0, Color(0xFFFFB300)),
+      (285.0, 54.0, Color(0xFFD84315)),
+      (330.0, 38.0, Color(0xFFFF8F00)),
+    ];
+    for (final (double deg, double radDist, Color lc) in leafRing) {
+      final double lRad = (deg - cameraYaw) * math.pi / 180.0;
+      final double lx = math.sin(lRad) * radDist;
+      final double ly = 11.0 + math.cos(lRad) * (radDist * 0.22);
+      canvas.drawOval(
+        Rect.fromCenter(center: Offset(lx, ly), width: 7.5, height: 4.0),
+        Paint()..color = lc,
+      );
+    }
+
+    // Helper to draw the 6 orbiting cast-iron plaza bollards & slack chains (back pass vs front pass)
+    void drawOrbitingBollardsAndChains({required bool frontPass}) {
+      final Paint chainPaint = Paint()
+        ..color = ironHighlight.withValues(alpha: frontPass ? 0.80 : 0.45)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = frontPass ? 1.6 : 1.2;
+
+      for (int b = 0; b < 6; b++) {
+        final double bRad1 = (b * 60.0 - cameraYaw) * math.pi / 180.0;
+        final double bRad2 = ((b + 1) * 60.0 - cameraYaw) * math.pi / 180.0;
+        final double midCos = (math.cos(bRad1) + math.cos(bRad2)) * 0.5;
+        if ((midCos >= 0.0) == frontPass) {
+          final double x1 = math.sin(bRad1) * 76.0;
+          final double y1 = 10.0 + math.cos(bRad1) * 14.0 - 16.0;
+          final double x2 = math.sin(bRad2) * 76.0;
+          final double y2 = 10.0 + math.cos(bRad2) * 14.0 - 16.0;
+          canvas.drawPath(
+            Path()
+              ..moveTo(x1, y1)
+              ..quadraticBezierTo(
+                (x1 + x2) * 0.5,
+                (y1 + y2) * 0.5 + 8.5,
+                x2,
+                y2,
+              ),
+            chainPaint,
+          );
+        }
+      }
+
+      for (int b = 0; b < 6; b++) {
+        final double bRad = (b * 60.0 - cameraYaw) * math.pi / 180.0;
+        final double bCos = math.cos(bRad);
+        if ((bCos >= 0.0) != frontPass) continue;
+        final double bolX = math.sin(bRad) * 76.0;
+        final double bolY = 10.0 + bCos * 14.0;
+        final double bScale = 0.86 + 0.16 * bCos;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: Offset(bolX, bolY - 10 * bScale),
+              width: 6.8 * bScale,
+              height: 20.0 * bScale,
+            ),
+            const Radius.circular(3),
+          ),
+          Paint()..color = bCos >= 0 ? ironMid : ironDark,
+        );
+        canvas.drawCircle(
+          Offset(bolX, bolY - 21 * bScale),
+          3.8 * bScale,
+          Paint()..color = ironHighlight,
+        );
+      }
+    }
+
+    // Back-hemisphere bollards & chains behind the lamp post
+    drawOrbitingBollardsAndChains(frontPass: false);
+
+    // 2. Fluted Octagonal Cast-Iron Pedestal Base & Column with 3D rotating facets
     final RRect lowerPlinth = RRect.fromRectAndRadius(
       const Rect.fromLTWH(-26, -18, 52, 26),
       const Radius.circular(6),
@@ -3130,8 +3259,8 @@ class StreetLampWorldPainter extends CustomPainter {
       lowerPlinth,
       Paint()
         ..shader = ui.Gradient.linear(
-          const Offset(-26, 0),
-          const Offset(26, 0),
+          Offset(-26 + lightDirX * 8, 0),
+          Offset(26 + lightDirX * 8, 0),
           [ironDark, ironMid, ironHighlight, ironDark],
           const [0.0, 0.35, 0.70, 1.0],
         ),
@@ -3147,110 +3276,28 @@ class StreetLampWorldPainter extends CustomPainter {
       taperedBase,
       Paint()
         ..shader = ui.Gradient.linear(
-          const Offset(-22, 0),
-          const Offset(22, 0),
+          Offset(-22 + lightDirX * 6, 0),
+          Offset(22 + lightDirX * 6, 0),
           [ironDark, ironMid, ironHighlight, ironDark],
           const [0.0, 0.35, 0.70, 1.0],
         ),
     );
 
-    // Seamless Cobblestone Curbing Socket & Embedded Plaza Stones tucking the iron plinth into the ground
-    final Color plazaStoneDark = switch (atmosphereMode) {
-      CoconutAtmosphereMode.sunset => const Color(0xFF1E192B),
-      CoconutAtmosphereMode.night => const Color(0xFF131624),
-      CoconutAtmosphereMode.noon => const Color(0xFF3E3A4B),
-      CoconutAtmosphereMode.rain => const Color(0xFF171C28),
-    };
-    final Color plazaStoneMid = switch (atmosphereMode) {
-      CoconutAtmosphereMode.sunset => const Color(0xFF2B243A),
-      CoconutAtmosphereMode.night => const Color(0xFF1D2236),
-      CoconutAtmosphereMode.noon => const Color(0xFF524D63),
-      CoconutAtmosphereMode.rain => const Color(0xFF242B3D),
-    };
-    final Path curbSocket = Path()
-      ..moveTo(-64, 12)
-      ..quadraticBezierTo(-34, -2, 0, 2)
-      ..quadraticBezierTo(34, -2, 64, 12)
-      ..quadraticBezierTo(40, 24, 0, 22)
-      ..quadraticBezierTo(-40, 24, -64, 12)
-      ..close();
-    canvas.drawPath(curbSocket, Paint()..color = plazaStoneMid);
-    // Individual radial granite setts / cobblestones around the lamp base
-    for (int s = -4; s <= 4; s++) {
-      final double sx = s * 11.5;
-      final double sy = 8.0 + (s.abs() % 2) * 3.0;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(sx, sy), width: 9.5, height: 5.5),
-          const Radius.circular(2),
-        ),
-        Paint()..color = s.isEven ? plazaStoneDark : plazaStoneMid,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(sx, sy), width: 9.5, height: 5.5),
-          const Radius.circular(2),
-        ),
+    // 8 rotating octagonal pedestal facet seams & embossed cast-iron panels
+    for (int f = 0; f < 8; f++) {
+      final double fRad = (f * 45.0 - cameraYaw) * math.pi / 180.0;
+      final double fCos = math.cos(fRad);
+      if (fCos <= -0.10) continue;
+      final double fSin = math.sin(fRad);
+      final double botX = fSin * 21.0;
+      final double topX = fSin * 12.5;
+      canvas.drawLine(
+        Offset(botX, 6),
+        Offset(topX, -72),
         Paint()
-          ..color = poolCore.withValues(alpha: 0.28)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.9,
-      );
-    }
-    // 4 Short Cast-Iron Plaza Bollards with slack chain & fallen autumn sycamore leaves
-    for (final double bolX in [-78.0, -44.0, 44.0, 78.0]) {
-      final double bolY = bolX.abs() > 60 ? 6.0 : 14.0;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(bolX, bolY - 10), width: 6.5, height: 20),
-          const Radius.circular(3),
-        ),
-        Paint()..color = ironMid,
-      );
-      canvas.drawCircle(
-        Offset(bolX, bolY - 21),
-        3.8,
-        Paint()..color = ironHighlight,
-      );
-    }
-    // Slack wrought-iron chains linking the bollards
-    final Paint chainPaint = Paint()
-      ..color = ironHighlight.withValues(alpha: 0.75)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6;
-    canvas.drawPath(
-      Path()
-        ..moveTo(-78, -10)
-        ..quadraticBezierTo(-61, 2, -44, -2),
-      chainPaint,
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(44, -2)
-        ..quadraticBezierTo(61, 2, 78, -10),
-      chainPaint,
-    );
-    // Fallen autumn leaves & small rain puddle by the curb
-    for (final (double lx, double ly, Color lc) in const [
-      (-54.0, 14.0, Color(0xFFD84315)),
-      (-32.0, 17.0, Color(0xFFFF8F00)),
-      (28.0, 16.0, Color(0xFFEF6C00)),
-      (56.0, 12.0, Color(0xFFFFB300)),
-    ]) {
-      canvas.drawOval(
-        Rect.fromCenter(center: Offset(lx, ly), width: 7.5, height: 4.0),
-        Paint()..color = lc,
-      );
-    }
-
-    // Decorative collar rings
-    for (final double ry in [-72.0, -140.0, -212.0]) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(0, ry), width: 28, height: 8),
-          const Radius.circular(4),
-        ),
-        Paint()..color = ironHighlight,
+          ..color = (f.isEven ? ironHighlight : ironDark)
+              .withValues(alpha: (0.28 + 0.45 * fCos).clamp(0.0, 1.0))
+          ..strokeWidth = 1.5,
       );
     }
 
@@ -3259,31 +3306,84 @@ class StreetLampWorldPainter extends CustomPainter {
       const Rect.fromLTWH(-8.5, -226, 17, 154),
       Paint()
         ..shader = ui.Gradient.linear(
-          const Offset(-8.5, 0),
-          const Offset(8.5, 0),
+          Offset(-8.5 + lightDirX * 3, 0),
+          Offset(8.5 + lightDirX * 3, 0),
           [ironDark, ironMid, ironHighlight, ironDark],
           const [0.0, 0.35, 0.70, 1.0],
         ),
     );
-    // Fluted vertical grooves
-    for (final double gx in [-4.0, 0.0, 4.0]) {
+    // 8 3D-rotating fluted vertical grooves around the cylindrical post
+    for (int g = 0; g < 8; g++) {
+      final double gRad = (g * 45.0 - cameraYaw) * math.pi / 180.0;
+      final double gCos = math.cos(gRad);
+      if (gCos <= -0.05) continue;
+      final double gx = math.sin(gRad) * 7.6;
       canvas.drawLine(
         Offset(gx, -76),
         Offset(gx, -222),
         Paint()
-          ..color = ironDark.withValues(alpha: 0.65)
+          ..color = (g.isEven ? ironDark : ironHighlight)
+              .withValues(alpha: (0.25 + 0.50 * gCos).clamp(0.0, 1.0))
           ..strokeWidth = 1.3,
       );
     }
 
-    // 2B. Two Classic Enameled Parisian Street Sign Plates ("⬅ CAFÉ DE NUIT", "JAZZ CLUB ➡")
-    final List<(Offset, String)> signs = const [
-      (Offset(-46, -178), '⬅ CAFÉ DE NUIT'),
-      (Offset(46, -166), 'JAZZ CLUB ➡'),
+    // Decorative collar rings with rotating brass rivets
+    for (final double ry in [-72.0, -140.0, -212.0]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(0, ry), width: 28, height: 8),
+          const Radius.circular(4),
+        ),
+        Paint()..color = ironHighlight,
+      );
+      for (int r = 0; r < 6; r++) {
+        final double rRad = (r * 60.0 - cameraYaw) * math.pi / 180.0;
+        if (math.cos(rRad) <= 0.0) continue;
+        canvas.drawCircle(
+          Offset(math.sin(rRad) * 11.5, ry),
+          1.4,
+          Paint()..color = ironDark,
+        );
+      }
+    }
+
+    // 2B. Two Classic Enameled Parisian Street Sign Plates rotating 360° in 3D
+    // Mounted at 270° (Left at yaw=0) and 90° (Right at yaw=0), sorted by depth
+    final List<(double, double, String)> signSpecs = const [
+      (270.0, -178.0, '⬅ CAFÉ DE NUIT'),
+      (90.0, -166.0, 'JAZZ CLUB ➡'),
     ];
-    for (final (Offset sCenter, String sText) in signs) {
+    final List<(double, double, double, String)> sortedSigns = [
+      for (final (double deg, double sy, String sText) in signSpecs)
+        (
+          math.cos((deg - cameraYaw) * math.pi / 180.0),
+          (deg - cameraYaw) * math.pi / 180.0,
+          sy,
+          sText,
+        ),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+
+    for (final (double sCos, double sRad, double sy, String sText)
+        in sortedSigns) {
+      final double sSin = math.sin(sRad);
+      // Horizontal foreshortening as the plate rotates in 3D
+      final double foreshorten = sSin.abs().clamp(0.18, 1.0);
+      final double plateW = 72.0 * foreshorten;
+      final double centerX = sSin * 44.0;
+      final Offset sCenter = Offset(centerX, sy + sCos * 2.0);
+
+      // Mounting bracket ring to post
+      canvas.drawLine(
+        Offset(0, sy),
+        sCenter,
+        Paint()
+          ..color = ironMid
+          ..strokeWidth = 2.6,
+      );
+
       final RRect signPlate = RRect.fromRectAndRadius(
-        Rect.fromCenter(center: sCenter, width: 72, height: 14),
+        Rect.fromCenter(center: sCenter, width: plateW, height: 14),
         const Radius.circular(2.5),
       );
       canvas.drawRRect(signPlate, Paint()..color = const Color(0xFF0D2B56));
@@ -3294,34 +3394,55 @@ class StreetLampWorldPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.1,
       );
-      final TextPainter stp = TextPainter(
-        text: TextSpan(
-          text: sText,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 6.8,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.4,
+      if (foreshorten > 0.34) {
+        canvas.save();
+        canvas.translate(sCenter.dx, sCenter.dy);
+        canvas.scale(foreshorten, 1.0);
+        final TextPainter stp = TextPainter(
+          text: TextSpan(
+            text: sText,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 6.8,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+            ),
           ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      stp.paint(canvas, sCenter - Offset(stp.width * 0.5, stp.height * 0.5));
+          textDirection: TextDirection.ltr,
+        )..layout();
+        stp.paint(canvas, Offset(-stp.width * 0.5, -stp.height * 0.5));
+        canvas.restore();
+      }
     }
 
-    // Ornate crossbar, twin scroll brackets & 2 Hanging Flower Baskets at -216
+    // Ornate crossbar, twin scroll brackets & 2 Hanging Flower Baskets rotating 360° at -216
+    final double barRad = (90.0 - cameraYaw) * math.pi / 180.0;
+    final double barSpan = (math.sin(barRad).abs() * 84.0).clamp(18.0, 84.0);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromCenter(center: const Offset(0, -216), width: 84, height: 6),
+        Rect.fromCenter(center: const Offset(0, -216), width: barSpan, height: 6),
         const Radius.circular(3),
       ),
       Paint()..color = ironMid,
     );
-    for (final int side in [-1, 1]) {
+
+    final List<double> bracketAngles = [270.0, 90.0];
+    bracketAngles.sort((a, b) {
+      final double ca = math.cos((a - cameraYaw) * math.pi / 180.0);
+      final double cb = math.cos((b - cameraYaw) * math.pi / 180.0);
+      return ca.compareTo(cb);
+    });
+    for (final double bDeg in bracketAngles) {
+      final double bRad = (bDeg - cameraYaw) * math.pi / 180.0;
+      final double bSin = math.sin(bRad);
+      final double bCos = math.cos(bRad);
+      final double bx = bSin * 34.0;
+      final double byOff = bCos * 3.5;
+
       final Path scroll = Path()
-        ..moveTo(side * 8.0, -192)
-        ..quadraticBezierTo(side * 34.0, -196, side * 34.0, -216)
-        ..quadraticBezierTo(side * 20.0, -228, side * 22.0, -234);
+        ..moveTo(bSin * 8.0, -192 + byOff * 0.4)
+        ..quadraticBezierTo(bx, -196 + byOff, bx, -216 + byOff)
+        ..quadraticBezierTo(bSin * 20.0, -228 + byOff * 0.5, bSin * 22.0, -234);
       canvas.drawPath(
         scroll,
         Paint()
@@ -3331,41 +3452,44 @@ class StreetLampWorldPainter extends CustomPainter {
           ..strokeCap = StrokeCap.round,
       );
 
-      // Hanging flower basket with trailing ivy & red geraniums suspended from scroll bracket
-      final double bx = side * 34.0;
+      // Hanging flower basket with trailing ivy & red geraniums suspended in 3D
+      final double basketScale = 0.88 + 0.14 * bCos;
       canvas.drawLine(
-        Offset(bx, -214),
-        Offset(bx, -200),
+        Offset(bx, -214 + byOff),
+        Offset(bx, -200 + byOff),
         Paint()
           ..color = ironDark
           ..strokeWidth = 1.4,
       );
       canvas.drawArc(
-        Rect.fromCenter(center: Offset(bx, -200), width: 16, height: 12),
+        Rect.fromCenter(
+          center: Offset(bx, -200 + byOff),
+          width: 16 * basketScale,
+          height: 12 * basketScale,
+        ),
         0,
         math.pi,
         true,
         Paint()..color = const Color(0xFF5D4037),
       );
-      // Trailing green ivy & red/pink geranium blooms
       canvas.drawCircle(
-        Offset(bx - 4, -202),
-        3.5,
+        Offset(bx - 4 * basketScale, -202 + byOff),
+        3.5 * basketScale,
         Paint()..color = const Color(0xFF2E7D32),
       );
       canvas.drawCircle(
-        Offset(bx + 4, -202),
-        3.5,
+        Offset(bx + 4 * basketScale, -202 + byOff),
+        3.5 * basketScale,
         Paint()..color = const Color(0xFF388E3C),
       );
       canvas.drawCircle(
-        Offset(bx, -204),
-        2.8,
+        Offset(bx, -204 + byOff),
+        2.8 * basketScale,
         Paint()..color = const Color(0xFFE53935),
       );
       canvas.drawCircle(
-        Offset(bx + side * 3, -201),
-        2.4,
+        Offset(bx + bSin * 3.0, -201 + byOff),
+        2.4 * basketScale,
         Paint()..color = const Color(0xFFFF80AB),
       );
     }
@@ -3389,13 +3513,27 @@ class StreetLampWorldPainter extends CustomPainter {
         ),
     );
 
-    // 4. Larger 6-Sided Hexagonal Bevelled Glass Lantern Chamber & Brass Finials
+    // 4. 6-Sided Hexagonal Bevelled Glass Lantern Chamber & Rotating Brass Finials
     final Path glassChamber = Path()
       ..moveTo(-22, -234)
       ..lineTo(-32, -288)
       ..lineTo(32, -288)
       ..lineTo(22, -234)
       ..close();
+
+    // Back-hemisphere hexagonal frame bars (drawn behind the glowing bulb)
+    for (int k = 0; k < 6; k++) {
+      final double kRad = (k * 60.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(kRad) >= 0.0) continue;
+      final double kSin = math.sin(kRad);
+      canvas.drawLine(
+        Offset(kSin * 21.5, -234),
+        Offset(kSin * 31.5, -288),
+        Paint()
+          ..color = ironDark.withValues(alpha: 0.50)
+          ..strokeWidth = 1.4,
+      );
+    }
 
     canvas.drawPath(
       glassChamber,
@@ -3416,27 +3554,19 @@ class StreetLampWorldPainter extends CustomPainter {
         ),
     );
 
-    // Bevelled glass highlight streaks
-    canvas.drawLine(
-      const Offset(-18, -282),
-      const Offset(-12, -240),
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.45)
-        ..strokeWidth = 2.0
-        ..strokeCap = StrokeCap.round,
-    );
-
-    // Glowing Edison bulb & filament cage inside the lantern
+    // Glowing Edison bulb & 3D rotating filament loop inside the lantern
     canvas.drawCircle(
       lanternCenter,
       10.5,
       Paint()..color = const Color(0xFFFFFFFF),
     );
+    final double filSpan =
+        (math.cos(cameraYaw * math.pi / 180.0) * 4.8).clamp(-4.8, 4.8);
     final Path filament = Path()
-      ..moveTo(-3.5, -255)
-      ..lineTo(-4.5, -267)
-      ..quadraticBezierTo(0, -274, 4.5, -267)
-      ..lineTo(3.5, -255);
+      ..moveTo(-filSpan * 0.75, -255)
+      ..lineTo(-filSpan, -267)
+      ..quadraticBezierTo(0, -274, filSpan, -267)
+      ..lineTo(filSpan * 0.75, -255);
     canvas.drawPath(
       filament,
       Paint()
@@ -3445,7 +3575,7 @@ class StreetLampWorldPainter extends CustomPainter {
         ..strokeWidth = 1.9,
     );
 
-    // 6-sided lantern metal frame bars (-11, 0, +11)
+    // Outer chamber silhouette & front-hemisphere rotating hexagonal frame bars + glass highlights
     canvas.drawPath(
       glassChamber,
       Paint()
@@ -3453,28 +3583,65 @@ class StreetLampWorldPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.6,
     );
-    for (final double bx in [-11.0, 0.0, 11.0]) {
+    for (int k = 0; k < 6; k++) {
+      final double kRad = (k * 60.0 - cameraYaw) * math.pi / 180.0;
+      final double kCos = math.cos(kRad);
+      if (kCos < 0.0) continue;
+      final double kSin = math.sin(kRad);
       canvas.drawLine(
-        Offset(bx * 0.75, -234),
-        Offset(bx, -288),
+        Offset(kSin * 21.5, -234),
+        Offset(kSin * 31.5, -288),
         Paint()
           ..color = ironDark
-          ..strokeWidth = 1.8,
+          ..strokeWidth = 1.6 + 0.6 * kCos,
       );
+      // Rotating bevelled glass highlight streak on front panes
+      final double paneMidRad = ((k * 60.0 + 30.0) - cameraYaw) * math.pi / 180.0;
+      if (math.cos(paneMidRad) > 0.25) {
+        final double pSin = math.sin(paneMidRad);
+        canvas.drawLine(
+          Offset(pSin * 24.0, -282),
+          Offset(pSin * 16.0, -240),
+          Paint()
+            ..color = Colors.white.withValues(
+              alpha: (0.48 * math.cos(paneMidRad)).clamp(0.0, 0.50),
+            )
+            ..strokeWidth = 2.0
+            ..strokeCap = StrokeCap.round,
+        );
+      }
     }
 
-    // Lantern cupola dome & brass corner finials
+    // Lantern cupola dome & 6 rotating brass corner finials
     final Path dome = Path()
       ..moveTo(-36, -288)
       ..quadraticBezierTo(0, -320, 36, -288)
       ..close();
     canvas.drawPath(dome, Paint()..color = ironMid);
-    for (final double fx in [-31.0, 31.0]) {
-      canvas.drawCircle(
-        Offset(fx, -291),
-        3.0,
-        Paint()..color = const Color(0xFFFFD54F),
-      );
+    // Dome ribs rotating in 3D
+    for (int k = 0; k < 6; k++) {
+      final double kRad = (k * 60.0 - cameraYaw) * math.pi / 180.0;
+      final double kSin = math.sin(kRad);
+      final double kCos = math.cos(kRad);
+      if (kCos >= -0.1) {
+        canvas.drawPath(
+          Path()
+            ..moveTo(kSin * 33.0, -288)
+            ..quadraticBezierTo(kSin * 14.0, -304, 0, -305),
+          Paint()
+            ..color = ironHighlight.withValues(alpha: 0.45)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.3,
+        );
+      }
+      // 6 rotating brass corner finials on the hexagonal rim
+      if (kCos >= -0.25) {
+        canvas.drawCircle(
+          Offset(kSin * 32.0, -290 + kCos * 2.0),
+          2.6 + 0.6 * kCos,
+          Paint()..color = const Color(0xFFFFD54F),
+        );
+      }
     }
     canvas.drawLine(
       const Offset(0, -304),
@@ -3485,7 +3652,7 @@ class StreetLampWorldPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
-    // 5. Style-Specific Accessories on the Street Lamp
+    // 5. Style-Specific Accessories on the Street Lamp (all rotating in 3D with cameraYaw)
     switch (styleMode) {
       case CoconutStyleMode.natural:
         _drawNaturalLampDetails(canvas, lanternCenter);
@@ -3504,37 +3671,52 @@ class StreetLampWorldPainter extends CustomPainter {
         break;
     }
 
+    // Front-hemisphere bollards & chains in front of the lamp post
+    drawOrbitingBollardsAndChains(frontPass: true);
+
     canvas.restore();
   }
 
   void _drawNaturalLampDetails(Canvas canvas, Offset lanternCenter) {
-    // Climbing green ivy vine wrapped around the lower cast-iron post
-    final Path vine = Path()
-      ..moveTo(-14, 4)
-      ..quadraticBezierTo(12, -28, -8, -62)
-      ..quadraticBezierTo(10, -95, -5, -132);
-    canvas.drawPath(
-      vine,
-      Paint()
-        ..color = const Color(0xFF2E7D32)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5,
-    );
-    for (int l = 0; l < 7; l++) {
-      final double ly = -12.0 - l * 17.0;
-      final double lx = (l.isEven ? -8.0 : 8.0);
-      canvas.drawOval(
-        Rect.fromCenter(center: Offset(lx, ly), width: 9, height: 5.5),
-        Paint()..color = const Color(0xFF4CAF50),
+    // 3D spiraling green ivy vine wrapped around the lower cast-iron post
+    final double yawRad = cameraYaw * math.pi / 180.0;
+    for (int seg = 0; seg < 24; seg++) {
+      final double t0 = seg / 24.0;
+      final double t1 = (seg + 1) / 24.0;
+      final double a0 = t0 * math.pi * 4.0 - yawRad;
+      final double a1 = t1 * math.pi * 4.0 - yawRad;
+      if (math.cos(a0) < -0.15 && math.cos(a1) < -0.15) continue;
+      final double r0 = 16.0 - t0 * 7.5;
+      final double r1 = 16.0 - t1 * 7.5;
+      final double y0 = 4.0 - t0 * 142.0;
+      final double y1 = 4.0 - t1 * 142.0;
+      canvas.drawLine(
+        Offset(math.sin(a0) * r0, y0),
+        Offset(math.sin(a1) * r1, y1),
+        Paint()
+          ..color = const Color(0xFF2E7D32)
+          ..strokeWidth = 2.6
+          ..strokeCap = StrokeCap.round,
       );
+      if (seg % 3 == 0 && math.cos(a0) > 0.0) {
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(math.sin(a0) * (r0 + 3.0), y0),
+            width: 9.0,
+            height: 5.5,
+          ),
+          Paint()..color = const Color(0xFF4CAF50),
+        );
+      }
     }
 
-    // 4 fluttering nocturnal moths orbiting the warm lantern light
+    // 4 fluttering nocturnal moths orbiting the warm lantern light in 3D
     for (int m = 0; m < 4; m++) {
-      final double angle = time * (2.4 + m * 0.35) + m * (math.pi * 0.5);
-      final double mx = lanternCenter.dx + math.cos(angle) * (42.0 + m * 8.0);
+      final double angle =
+          time * (2.2 + m * 0.35) + m * (math.pi * 0.5) - yawRad;
+      final double mx = lanternCenter.dx + math.sin(angle) * (44.0 + m * 7.0);
       final double my =
-          lanternCenter.dy + math.sin(angle * 1.6) * (18.0 + m * 4.0);
+          lanternCenter.dy + math.cos(angle * 1.4) * (16.0 + m * 4.0);
       final double wing = math.sin(time * 18.0 + m) * 4.0;
       canvas.drawOval(
         Rect.fromCenter(
@@ -3556,39 +3738,57 @@ class StreetLampWorldPainter extends CustomPainter {
   }
 
   void _drawArcadeLampDetails(Canvas canvas, Offset lanternCenter) {
-    // Neon magenta & cyan plasma glow tubes along the post
-    canvas.drawLine(
-      const Offset(-11, -74),
-      const Offset(-11, -210),
-      Paint()
-        ..color = const Color(0xFFFF007F)
-        ..strokeWidth = 3.2
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.drawLine(
-      const Offset(11, -74),
-      const Offset(11, -210),
-      Paint()
-        ..color = const Color(0xFF00E5FF)
-        ..strokeWidth = 3.2
-        ..strokeCap = StrokeCap.round,
-    );
+    final double yawRad = cameraYaw * math.pi / 180.0;
+    // Neon magenta & cyan plasma glow tubes rotating 360° around the post
+    for (final (double deg, Color tubeColor) in const [
+      (270.0, Color(0xFFFF007F)),
+      (90.0, Color(0xFF00E5FF)),
+    ]) {
+      final double tRad = deg * math.pi / 180.0 - yawRad;
+      final double tx = math.sin(tRad) * 11.5;
+      canvas.drawLine(
+        Offset(tx, -74),
+        Offset(tx, -210),
+        Paint()
+          ..color = tubeColor.withValues(
+            alpha: math.cos(tRad) >= -0.2 ? 0.95 : 0.45,
+          )
+          ..strokeWidth = 3.2
+          ..strokeCap = StrokeCap.round,
+      );
+    }
 
-    // Retro synthwave stickers on the lower post
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(-9, -120, 18, 12),
-        const Radius.circular(2),
-      ),
-      Paint()..color = const Color(0xFFFFEA00),
-    );
-    canvas.drawCircle(
-      const Offset(0, -96),
-      6.5,
-      Paint()..color = const Color(0xFFFF007F),
-    );
+    // Retro synthwave stickers rotating around the lower post
+    final double stCos = math.cos(-yawRad);
+    final double stSin = math.sin(-yawRad);
+    if (stCos > -0.15) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(stSin * 6.0, -114),
+            width: 16.0 * stCos.abs().clamp(0.25, 1.0),
+            height: 12,
+          ),
+          const Radius.circular(2),
+        ),
+        Paint()..color = const Color(0xFFFFEA00),
+      );
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(stSin * 6.5, -96),
+          width: 13.0 * stCos.abs().clamp(0.25, 1.0),
+          height: 13.0,
+        ),
+        Paint()..color = const Color(0xFFFF007F),
+      );
+    }
 
-    // Cool pixel/visor sunglasses over the glass lantern
+    // Cool pixel/visor sunglasses rotating in 3D over the glass lantern
+    final double vShift = stSin * 14.0;
+    final double vScaleX = 0.45 + 0.55 * stCos.abs();
+    canvas.save();
+    canvas.translate(vShift, 0);
+    canvas.scale(vScaleX, 1.0);
     final Path visor = Path()
       ..moveTo(-30, -270)
       ..lineTo(30, -270)
@@ -3606,13 +3806,16 @@ class StreetLampWorldPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.2,
     );
+    canvas.restore();
   }
 
   void _drawCocktailJazzLampDetails(Canvas canvas, Offset lanternCenter) {
-    // Tilted midnight jazz fedora hat on top of the lantern dome
+    final double yawRad = cameraYaw * math.pi / 180.0;
+    final double fedSin = math.sin(0.35 - yawRad);
+    // Tilted midnight jazz fedora hat rotating in 3D on top of the lantern dome
     canvas.save();
-    canvas.translate(4, -304);
-    canvas.rotate(0.18);
+    canvas.translate(fedSin * 6.0, -304);
+    canvas.rotate(fedSin * 0.20);
     canvas.drawOval(
       Rect.fromCenter(center: Offset.zero, width: 68, height: 14),
       Paint()..color = const Color(0xFF1C2331),
@@ -3620,7 +3823,7 @@ class StreetLampWorldPainter extends CustomPainter {
     final Path crown = Path()
       ..moveTo(-20, 0)
       ..lineTo(-15, -22)
-      ..quadraticBezierTo(0, -18, 15, -22)
+      ..quadraticBezierTo(fedSin * 4.0, -18, 15, -22)
       ..lineTo(20, 0)
       ..close();
     canvas.drawPath(crown, Paint()..color = const Color(0xFF283246));
@@ -3631,9 +3834,14 @@ class StreetLampWorldPainter extends CustomPainter {
     );
     canvas.restore();
 
-    // Golden brass saxophone leaning against the base of the lamp
+    // Golden brass saxophone orbiting the base of the lamp at 70°
+    final double saxRad = (70.0 - cameraYaw) * math.pi / 180.0;
+    final double saxX = math.sin(saxRad) * 20.0;
+    final double saxY = -12.0 + math.cos(saxRad) * 5.0;
+    final double saxDir = math.sin(saxRad) >= 0 ? 1.0 : -1.0;
     canvas.save();
-    canvas.translate(18, -14);
+    canvas.translate(saxX, saxY);
+    canvas.scale(saxDir, 1.0);
     final Path sax = Path()
       ..moveTo(-6, -38)
       ..lineTo(4, -8)
@@ -3653,11 +3861,12 @@ class StreetLampWorldPainter extends CustomPainter {
     );
     canvas.restore();
 
-    // Floating jazz musical notes around the lantern
+    // Floating jazz musical notes orbiting around the lantern in 3D
     for (int n = 0; n < 4; n++) {
       final double p = (time * 0.5 + n * 0.25) % 1.0;
-      final double nx = (n.isEven ? -1 : 1) * (36.0 + n * 8.0);
-      final double ny = lanternCenter.dy - p * 45.0;
+      final double nRad = (n * 90.0 + 35.0 - cameraYaw) * math.pi / 180.0;
+      final double nx = math.sin(nRad) * (40.0 + n * 5.0);
+      final double ny = lanternCenter.dy - p * 45.0 + math.cos(nRad) * 6.0;
       final Paint npaint = Paint()
         ..color = const Color(0xFFFFD54F)
             .withValues(alpha: math.sin(p * math.pi).clamp(0.0, 1.0))
@@ -3668,13 +3877,17 @@ class StreetLampWorldPainter extends CustomPainter {
   }
 
   void _drawKingRoyalLampDetails(Canvas canvas, Offset lanternCenter) {
-    // Crimson velvet royal banner hanging from the crossbar
+    final double yawRad = cameraYaw * math.pi / 180.0;
+    // Crimson velvet royal banner hanging from the crossbar and rotating in 3D
+    final double banWidth =
+        (44.0 * math.cos(yawRad).abs()).clamp(10.0, 44.0);
+    final double banHalf = banWidth * 0.5;
     final Path banner = Path()
-      ..moveTo(-22, -214)
-      ..lineTo(22, -214)
-      ..lineTo(22, -162)
+      ..moveTo(-banHalf, -214)
+      ..lineTo(banHalf, -214)
+      ..lineTo(banHalf, -162)
       ..lineTo(0, -174)
-      ..lineTo(-22, -162)
+      ..lineTo(-banHalf, -162)
       ..close();
     canvas.drawPath(banner, Paint()..color = const Color(0xFFB71C1C));
     canvas.drawPath(
@@ -3685,21 +3898,41 @@ class StreetLampWorldPainter extends CustomPainter {
         ..strokeWidth = 2.0,
     );
 
-    // Royal golden crown finial atop the dome
-    final Path crown = Path()
+    // Royal golden crown finial atop the dome with 6 rotating 3D points
+    final Path crownBase = Path()
       ..moveTo(-18, -304)
-      ..lineTo(-22, -322)
-      ..lineTo(-10, -312)
-      ..lineTo(0, -326)
-      ..lineTo(10, -312)
-      ..lineTo(22, -322)
+      ..lineTo(-20, -313)
+      ..lineTo(20, -313)
       ..lineTo(18, -304)
       ..close();
-    canvas.drawPath(crown, Paint()..color = const Color(0xFFFFD54F));
+    canvas.drawPath(crownBase, Paint()..color = const Color(0xFFFFD54F));
+    for (int p = 0; p < 6; p++) {
+      final double pRad = (p * 60.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(pRad) < -0.25) continue;
+      final double px = math.sin(pRad) * 18.0;
+      canvas.drawPath(
+        Path()
+          ..moveTo(px - 4.5, -312)
+          ..lineTo(px, -325)
+          ..lineTo(px + 4.5, -312)
+          ..close(),
+        Paint()..color = const Color(0xFFFFD54F),
+      );
+      canvas.drawCircle(
+        Offset(px, -325),
+        2.0,
+        Paint()..color = p.isEven ? const Color(0xFFE53935) : const Color(0xFF00E5FF),
+      );
+    }
 
-    // City pigeon wearing a tiny golden crown perched on the crossbar
+    // City pigeon wearing a tiny golden crown perched on the rotating crossbar (90°)
+    final double pigRad = (90.0 - cameraYaw) * math.pi / 180.0;
+    final double pigX = math.sin(pigRad) * 28.0;
+    final double pigY = -222.0 + math.cos(pigRad) * 2.5;
+    final double pigDir = math.cos(pigRad) >= 0 ? 1.0 : -1.0;
     canvas.save();
-    canvas.translate(28, -222);
+    canvas.translate(pigX, pigY);
+    canvas.scale(pigDir, 1.0);
     canvas.drawOval(
       Rect.fromCenter(center: const Offset(0, 0), width: 13, height: 8),
       Paint()..color = const Color(0xFF90A4AE),
@@ -3709,7 +3942,6 @@ class StreetLampWorldPainter extends CustomPainter {
       4.2,
       Paint()..color = const Color(0xFF78909C),
     );
-    // Tiny pigeon crown
     final Path tinyCrown = Path()
       ..moveTo(2, -8)
       ..lineTo(3, -13)
@@ -3722,11 +3954,14 @@ class StreetLampWorldPainter extends CustomPainter {
   }
 
   void _drawLofiCozyLampDetails(Canvas canvas, Offset lanternCenter) {
-    // Giant studio headphones over the glass lantern
+    final double yawRad = cameraYaw * math.pi / 180.0;
+    // Giant studio headphones rotating in 3D over the glass lantern
+    final double bandSpan =
+        (72.0 * math.cos(yawRad).abs()).clamp(22.0, 72.0);
     canvas.drawArc(
       Rect.fromCenter(
         center: const Offset(0, -270),
-        width: 72,
+        width: bandSpan,
         height: 68,
       ),
       math.pi * 1.05,
@@ -3738,11 +3973,14 @@ class StreetLampWorldPainter extends CustomPainter {
         ..strokeWidth = 5.5
         ..strokeCap = StrokeCap.round,
     );
-    for (final int side in [-1, 1]) {
+    for (final double earDeg in [270.0, 90.0]) {
+      final double eRad = earDeg * math.pi / 180.0 - yawRad;
+      final double ex = math.sin(eRad) * 32.0;
+      final double ey = -262.0 + math.cos(eRad) * 3.0;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
-            center: Offset(side * 32.0, -262),
+            center: Offset(ex, ey),
             width: 11,
             height: 24,
           ),
@@ -3752,7 +3990,7 @@ class StreetLampWorldPainter extends CustomPainter {
       );
     }
 
-    // Warm striped knitted scarf wrapped around the lamp neck (-228)
+    // Warm striped knitted scarf wrapped around the lamp neck (-228) with 3D rotating stripes & tail
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         const Rect.fromLTWH(-15, -234, 30, 11),
@@ -3760,27 +3998,38 @@ class StreetLampWorldPainter extends CustomPainter {
       ),
       Paint()..color = const Color(0xFFD32F2F),
     );
-    canvas.drawRect(
-      const Rect.fromLTWH(-7, -234, 5, 11),
-      Paint()..color = const Color(0xFFFFF8E1),
-    );
-    canvas.drawRect(
-      const Rect.fromLTWH(4, -234, 5, 11),
-      Paint()..color = const Color(0xFFFFF8E1),
-    );
-    // Hanging scarf tail swaying in the breeze
+    for (int st = 0; st < 6; st++) {
+      final double stRad = (st * 60.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(stRad) <= 0.0) continue;
+      final double sx = math.sin(stRad) * 11.0;
+      canvas.drawRect(
+        Rect.fromCenter(center: Offset(sx, -228.5), width: 4.2, height: 11),
+        Paint()..color = const Color(0xFFFFF8E1),
+      );
+    }
+    // Hanging scarf tail orbiting at 35° and swaying in the breeze
+    final double tailRad = (35.0 - cameraYaw) * math.pi / 180.0;
+    final double tailX = math.sin(tailRad) * 10.5;
     final double scarfSway = math.sin(time * 2.5) * 3.0;
     final Path scarfTail = Path()
-      ..moveTo(6, -224)
-      ..quadraticBezierTo(14 + scarfSway, -206, 10 + scarfSway, -190)
-      ..lineTo(18 + scarfSway, -190)
-      ..quadraticBezierTo(20 + scarfSway, -206, 13, -224)
+      ..moveTo(tailX - 3.5, -224)
+      ..quadraticBezierTo(
+        tailX + 4 + scarfSway,
+        -206,
+        tailX + scarfSway,
+        -190,
+      )
+      ..lineTo(tailX + 8 + scarfSway, -190)
+      ..quadraticBezierTo(tailX + 10 + scarfSway, -206, tailX + 3.5, -224)
       ..close();
     canvas.drawPath(scarfTail, Paint()..color = const Color(0xFFD32F2F));
 
-    // Sleepy orange tabby cat curled up at the base of the post
+    // Sleepy orange tabby cat curled up at the base of the post orbiting at 295°
+    final double catRad = (295.0 - cameraYaw) * math.pi / 180.0;
+    final double catX = math.sin(catRad) * 22.0;
+    final double catY = 6.0 + math.cos(catRad) * 6.0;
     canvas.save();
-    canvas.translate(-16, 6);
+    canvas.translate(catX, catY);
     canvas.drawOval(
       Rect.fromCenter(center: Offset.zero, width: 22, height: 12),
       Paint()..color = const Color(0xFFE67E22),
@@ -3790,7 +4039,6 @@ class StreetLampWorldPainter extends CustomPainter {
       5.5,
       Paint()..color = const Color(0xFFD35400),
     );
-    // Floating "Zzz" above the sleeping cat
     final double zp = (time * 0.45) % 1.0;
     final TextPainter ztp = TextPainter(
       text: TextSpan(

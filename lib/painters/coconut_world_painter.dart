@@ -5775,7 +5775,7 @@ class CoconutWorldPainter extends CustomPainter {
         _drawLofiHeadphonesAccessories(canvas, radius);
     }
 
-    // Sand grains nestled around the bottom of the coconut so it sits grounded in the beach
+    // Sand grains & orbiting seashells nestled around the bottom of the coconut
     final Path sandNest = Path()
       ..moveTo(-radius * 1.15, radius * 0.76)
       ..quadraticBezierTo(
@@ -5799,15 +5799,32 @@ class CoconutWorldPainter extends CustomPainter {
             ? const Color(0xFF2B354D)
             : const Color(0xFFC87A45),
     );
+    // Orbiting small seashells & coral pebbles around the coconut sand nest
+    for (int s = 0; s < 6; s++) {
+      final double sRad = (s * 60.0 + 25.0 - cameraYaw) * math.pi / 180.0;
+      final double sCos = math.cos(sRad);
+      if (sCos < -0.10) continue;
+      final double sx = math.sin(sRad) * (radius * 0.88);
+      final double sy = radius * 0.74 + sCos * (radius * 0.14);
+      canvas.drawOval(
+        Rect.fromCenter(center: Offset(sx, sy), width: 9.0, height: 5.0),
+        Paint()
+          ..color = s.isEven
+              ? const Color(0xFFFFF3E0)
+              : const Color(0xFFFFAB91),
+      );
+    }
 
     canvas.restore();
   }
 
   void _drawArcadeAccessories(Canvas canvas, double radius) {
-    // Little cocktail umbrella sticking out of the top-right of the coconut
+    // Little cocktail umbrella orbiting in 3D at 55° on the top of the coconut
+    final double umbRad = (55.0 - cameraYaw) * math.pi / 180.0;
+    final double umbSin = math.sin(umbRad);
     canvas.save();
-    canvas.translate(radius * 0.35, -radius * 0.78);
-    canvas.rotate(0.38);
+    canvas.translate(umbSin * radius * 0.38, -radius * 0.78);
+    canvas.rotate(umbSin * 0.38);
 
     // Stick
     canvas.drawLine(
@@ -5834,44 +5851,55 @@ class CoconutWorldPainter extends CustomPainter {
 
     canvas.restore();
 
-    // Cool Retro Deal-With-It / Sunset Aviator Shades
+    // Cool Retro Deal-With-It / Sunset Aviator Shades rotating in 3D with the coconut's face (15°)
+    final double faceRad = (15.0 - cameraYaw) * math.pi / 180.0;
+    final double fCos = math.cos(faceRad);
+    final double fSin = math.sin(faceRad);
     final Paint framePaint = Paint()..color = const Color(0xFF1A1A1A);
-    final Paint lensPaint = Paint()
-      ..shader = ui.Gradient.linear(
-        const Offset(0, -18),
-        const Offset(0, 4),
-        [const Color(0xFFFF4081), const Color(0xFFFF9100)],
-      );
-
-    final RRect leftLens = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(-radius * 0.34, -radius * 0.14),
-        width: radius * 0.54,
-        height: radius * 0.34,
-      ),
-      const Radius.circular(6),
-    );
-    final RRect rightLens = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(radius * 0.34, -radius * 0.14),
-        width: radius * 0.54,
-        height: radius * 0.34,
-      ),
-      const Radius.circular(6),
-    );
-
+    // Temple strap wrapping around the coconut
     canvas.drawRect(
       Rect.fromCenter(
-        center: Offset(0, -radius * 0.22),
-        width: radius * 1.4,
+        center: Offset(0, -radius * 0.20),
+        width: radius * 1.92,
         height: 3.5,
       ),
       framePaint,
     );
-    canvas.drawRRect(leftLens.inflate(2.5), framePaint);
-    canvas.drawRRect(rightLens.inflate(2.5), framePaint);
-    canvas.drawRRect(leftLens, lensPaint);
-    canvas.drawRRect(rightLens, lensPaint);
+    if (fCos > -0.15) {
+      final double faceShiftX = fSin * radius * 0.55;
+      final double squashX = fCos.clamp(0.24, 1.0);
+      canvas.save();
+      canvas.translate(faceShiftX, 0);
+      canvas.scale(squashX, 1.0);
+      final Paint lensPaint = Paint()
+        ..shader = ui.Gradient.linear(
+          const Offset(0, -18),
+          const Offset(0, 4),
+          [const Color(0xFFFF4081), const Color(0xFFFF9100)],
+        );
+
+      final RRect leftLens = RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(-radius * 0.34, -radius * 0.14),
+          width: radius * 0.54,
+          height: radius * 0.34,
+        ),
+        const Radius.circular(6),
+      );
+      final RRect rightLens = RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(radius * 0.34, -radius * 0.14),
+          width: radius * 0.54,
+          height: radius * 0.34,
+        ),
+        const Radius.circular(6),
+      );
+      canvas.drawRRect(leftLens.inflate(2.5), framePaint);
+      canvas.drawRRect(rightLens.inflate(2.5), framePaint);
+      canvas.drawRRect(leftLens, lensPaint);
+      canvas.drawRRect(rightLens, lensPaint);
+      canvas.restore();
+    }
   }
 
   void _drawCocktailAccessories(Canvas canvas, double radius) {
@@ -5893,11 +5921,13 @@ class CoconutWorldPainter extends CustomPainter {
       Paint()..color = const Color(0xFF4DD0E1),
     );
 
-    // Striped bent straw
+    // Striped bent straw orbiting in 3D at 290°
+    final double strawRad = (290.0 - cameraYaw) * math.pi / 180.0;
+    final double sSin = math.sin(strawRad);
     final Path straw = Path()
-      ..moveTo(-radius * 0.12, -radius * 0.74)
-      ..lineTo(-radius * 0.28, -radius * 1.28)
-      ..lineTo(-radius * 0.52, -radius * 1.38);
+      ..moveTo(sSin * radius * 0.12, -radius * 0.74)
+      ..lineTo(sSin * radius * 0.28, -radius * 1.28)
+      ..lineTo(sSin * radius * 0.54, -radius * 1.38);
     canvas.drawPath(
       straw,
       Paint()
@@ -5908,10 +5938,13 @@ class CoconutWorldPainter extends CustomPainter {
         ..strokeJoin = StrokeJoin.round,
     );
 
-    // Lime wedge on the rim
+    // Lime wedge orbiting on the rim at 75°
+    final double limeRad = (75.0 - cameraYaw) * math.pi / 180.0;
+    final double lSin = math.sin(limeRad);
+    final double lCos = math.cos(limeRad);
     canvas.drawArc(
       Rect.fromCircle(
-        center: Offset(radius * 0.42, -radius * 0.78),
+        center: Offset(lSin * radius * 0.42, -radius * 0.78 + lCos * 4.0),
         radius: radius * 0.24,
       ),
       -math.pi * 0.85,
@@ -5920,39 +5953,41 @@ class CoconutWorldPainter extends CustomPainter {
       Paint()..color = const Color(0xFF8BC34A),
     );
 
-    // Tropical Hibiscus Flower on the side
-    final Offset flowerCenter = Offset(-radius * 0.45, -radius * 0.58);
-    for (int p = 0; p < 5; p++) {
-      final double a = p * (2 * math.pi / 5);
+    // Tropical Hibiscus Flower orbiting on the rim at 315°
+    final double flRad = (315.0 - cameraYaw) * math.pi / 180.0;
+    if (math.cos(flRad) > -0.25) {
+      final Offset flowerCenter = Offset(
+        math.sin(flRad) * radius * 0.46,
+        -radius * 0.58 + math.cos(flRad) * 6.0,
+      );
+      for (int p = 0; p < 5; p++) {
+        final double a = p * (2 * math.pi / 5);
+        canvas.drawCircle(
+          flowerCenter.translate(math.cos(a) * 8, math.sin(a) * 8),
+          7.0,
+          Paint()..color = const Color(0xFFFF4081),
+        );
+      }
       canvas.drawCircle(
-        flowerCenter.translate(math.cos(a) * 8, math.sin(a) * 8),
-        7.0,
-        Paint()..color = const Color(0xFFFF4081),
+        flowerCenter,
+        4.0,
+        Paint()..color = const Color(0xFFFFEB3B),
       );
     }
-    canvas.drawCircle(
-      flowerCenter,
-      4.0,
-      Paint()..color = const Color(0xFFFFEB3B),
-    );
   }
 
   void _drawKingCrownAccessories(Canvas canvas, double radius) {
-    // Glowing golden crown sitting atop the coconut
+    // 3D Rotating Golden Crown with 8 rotating spikes & jewels sitting atop the coconut
     final double cy = -radius * 0.78;
-    final double cw = radius * 0.92;
-    final Path crown = Path()
+    final double cw = radius * 0.94;
+    final Path crownBase = Path()
       ..moveTo(-cw * 0.5, cy)
-      ..lineTo(-cw * 0.58, cy - radius * 0.45)
-      ..lineTo(-cw * 0.25, cy - radius * 0.18)
-      ..lineTo(0, cy - radius * 0.56)
-      ..lineTo(cw * 0.25, cy - radius * 0.18)
-      ..lineTo(cw * 0.58, cy - radius * 0.45)
+      ..lineTo(-cw * 0.54, cy - radius * 0.22)
+      ..lineTo(cw * 0.54, cy - radius * 0.22)
       ..lineTo(cw * 0.5, cy)
       ..close();
-
     canvas.drawPath(
-      crown,
+      crownBase,
       Paint()
         ..shader = ui.Gradient.linear(
           Offset(0, cy - radius * 0.56),
@@ -5960,38 +5995,48 @@ class CoconutWorldPainter extends CustomPainter {
           [const Color(0xFFFFF176), const Color(0xFFFFB300)],
         ),
     );
-    canvas.drawPath(
-      crown,
-      Paint()
-        ..color = const Color(0xFFE65100)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0,
-    );
 
-    // Crown jewels
-    canvas.drawCircle(
-      Offset(0, cy - radius * 0.18),
-      4.5,
-      Paint()..color = const Color(0xFFE53935),
-    );
-    canvas.drawCircle(
-      Offset(-cw * 0.28, cy - radius * 0.12),
-      3.5,
-      Paint()..color = const Color(0xFF00E5FF),
-    );
-    canvas.drawCircle(
-      Offset(cw * 0.28, cy - radius * 0.12),
-      3.5,
-      Paint()..color = const Color(0xFF00E5FF),
-    );
+    for (int k = 0; k < 8; k++) {
+      final double kRad = (k * 45.0 - cameraYaw) * math.pi / 180.0;
+      final double kCos = math.cos(kRad);
+      if (kCos < -0.20) continue;
+      final double kx = math.sin(kRad) * (cw * 0.48);
+      final double spikeTopY =
+          cy - radius * (k.isEven ? 0.54 : 0.42) + kCos * 2.5;
+      final Path spike = Path()
+        ..moveTo(kx - 7.0, cy - radius * 0.20)
+        ..lineTo(kx, spikeTopY)
+        ..lineTo(kx + 7.0, cy - radius * 0.20)
+        ..close();
+      canvas.drawPath(spike, Paint()..color = const Color(0xFFFFD54F));
+      canvas.drawPath(
+        spike,
+        Paint()
+          ..color = const Color(0xFFE65100)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4,
+      );
+      if (kCos > 0.0) {
+        canvas.drawCircle(
+          Offset(kx, cy - radius * 0.11),
+          (k.isEven ? 4.2 : 3.4) * kCos.clamp(0.35, 1.0),
+          Paint()
+            ..color =
+                k.isEven ? const Color(0xFFE53935) : const Color(0xFF00E5FF),
+        );
+      }
+    }
   }
 
   void _drawLofiHeadphonesAccessories(Canvas canvas, double radius) {
-    // Headband arc over the top of the coconut
+    final double yawRad = cameraYaw * math.pi / 180.0;
+    final double bandWidth =
+        (radius * 2.18 * math.cos(yawRad).abs()).clamp(radius * 0.65, radius * 2.18);
+    // Headband arc rotating in 3D over the top of the coconut
     canvas.drawArc(
       Rect.fromCenter(
         center: Offset(0, -radius * 0.08),
-        width: radius * 2.18,
+        width: bandWidth,
         height: radius * 1.95,
       ),
       math.pi * 1.05,
@@ -6004,12 +6049,15 @@ class CoconutWorldPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
-    // Left & Right Ear Cups
-    for (final int dir in [-1, 1]) {
+    // Left & Right Ear Cups orbiting at 270° and 90°
+    for (final double earDeg in [270.0, 90.0]) {
+      final double eRad = earDeg * math.pi / 180.0 - yawRad;
+      final double ex = math.sin(eRad) * (radius * 1.02);
+      final double ey = -radius * 0.05 + math.cos(eRad) * 4.5;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
-            center: Offset(dir * radius * 1.04, -radius * 0.05),
+            center: Offset(ex, ey),
             width: radius * 0.28,
             height: radius * 0.56,
           ),
@@ -6020,7 +6068,7 @@ class CoconutWorldPainter extends CustomPainter {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
-            center: Offset(dir * radius * 0.96, -radius * 0.05),
+            center: Offset(ex * 0.92, ey),
             width: radius * 0.12,
             height: radius * 0.48,
           ),
@@ -6030,12 +6078,13 @@ class CoconutWorldPainter extends CustomPainter {
       );
     }
 
-    // Floating musical notes drifting up from the headphones
+    // Floating musical notes orbiting in 3D from the headphones
     for (int n = 0; n < 3; n++) {
       final double p = ((time * 0.45 + n * 0.33) % 1.0);
+      final double nRad = (n * 120.0 + 45.0 - cameraYaw) * math.pi / 180.0;
       final double nx =
-          (n.isEven ? 1 : -1) * (radius * 0.8 + math.sin(time * 2.5 + n) * 12.0);
-      final double ny = -radius * 0.5 - p * radius * 1.2;
+          math.sin(nRad) * (radius * 0.85 + math.sin(time * 2.5 + n) * 10.0);
+      final double ny = -radius * 0.5 - p * radius * 1.2 + math.cos(nRad) * 6.0;
       final double alpha = math.sin(p * math.pi).clamp(0.0, 1.0);
       final Paint notePaint = Paint()
         ..color = const Color(0xFF80DEEA).withValues(alpha: alpha * 0.9)

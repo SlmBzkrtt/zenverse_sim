@@ -3077,140 +3077,218 @@ class DesertCactusWorldPainter extends CustomPainter {
         ),
     );
 
-    // 3. Left & Right Expressive Swaying Cactus Arms with 100% Accurate Spine Geometry
-    for (final int dir in [-1, 1]) {
-      canvas.save();
-      final double attachY = dir < 0 ? -74.0 : -62.0;
-      canvas.translate(dir * 25.0, attachY);
-      canvas.rotate(dir * armSway);
+    // Helper to draw the 3 3D-rotating Saguaro arms (depth-sorted behind vs in front of trunk)
+    void drawOrbitingCactusArms({required bool frontPass}) {
+      // (worldAngleDeg, attachY, armReach, armHeight, thickness, hasBudFlower)
+      const List<(double, double, double, double, double, bool)> armSpecs = [
+        (270.0, -74.0, 42.0, 58.0, 30.0, false),
+        (90.0, -62.0, 42.0, 58.0, 30.0, false),
+        (25.0, -108.0, 24.0, 30.0, 20.0, true),
+      ];
+      final List<(double, double, double, double, double, double, bool)> sorted = [
+        for (final spec in armSpecs)
+          (
+            math.cos((spec.$1 - cameraYaw) * math.pi / 180.0),
+            (spec.$1 - cameraYaw) * math.pi / 180.0,
+            spec.$2,
+            spec.$3,
+            spec.$4,
+            spec.$5,
+            spec.$6,
+          ),
+      ]..sort((a, b) => a.$1.compareTo(b.$1));
 
-      final Path armPath = Path()
-        ..moveTo(0, 0)
-        ..quadraticBezierTo(dir * 40.0, 0, dir * 42.0, -28.0)
-        ..lineTo(dir * 42.0, -58.0);
+      for (final (
+            double aCos,
+            double aRad,
+            double attachY,
+            double armReach,
+            double armHeight,
+            double thickness,
+            bool hasBudFlower,
+          ) in sorted) {
+        if ((aCos >= 0.0) != frontPass) continue;
+        final double aSin = math.sin(aRad);
+        final double depthScale = 0.88 + 0.12 * aCos;
+        final double attachX = aSin * 22.0;
+        final double reachX = aSin * armReach;
+        final double elbowY = -armHeight * 0.48 + aCos * 3.5;
+        final double tipY = -armHeight + aCos * 5.0;
 
-      // Arm shadow stroke + 3D green arm body (radius = 15px outer, 12px inner)
-      canvas.drawPath(
-        armPath,
-        Paint()
-          ..color = const Color(0xFF1B5E20)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 30.0
-          ..strokeCap = StrokeCap.round,
-      );
-      canvas.drawPath(
-        armPath,
-        Paint()
-          ..color = const Color(0xFF388E3C)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 24.0
-          ..strokeCap = StrokeCap.round,
-      );
-      // Inner sunlit rib highlight on the arm
-      canvas.drawPath(
-        armPath,
-        Paint()
-          ..color = const Color(0xFF81C784).withValues(alpha: 0.65)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 7.0
-          ..strokeCap = StrokeCap.round,
-      );
+        canvas.save();
+        canvas.translate(attachX, attachY);
+        canvas.rotate(aSin * armSway);
 
-      // Accurately attached golden spines ONLY along the vertical upper arm (sy = -28..-56)
-      // where the arm center is at x = dir * 42.0 (outer edge dir * 56.0, inner edge dir * 28.0)
-      final Paint spinePaint = Paint()
-        ..color = const Color(0xFFFFF59D)
-        ..strokeWidth = 1.25
-        ..strokeCap = StrokeCap.round;
-      for (int s = 0; s < 4; s++) {
-        final double sy = -28.0 - s * 9.5;
-        // Outer arm edge spine
-        canvas.drawLine(
-          Offset(dir * 56.0, sy),
-          Offset(dir * 62.0, sy - 2.5),
-          spinePaint,
+        final Path armPath = Path()
+          ..moveTo(0, 0)
+          ..quadraticBezierTo(reachX * 0.95, 0, reachX, elbowY)
+          ..lineTo(reachX, tipY);
+
+        // Outer dark green shadow contour
+        canvas.drawPath(
+          armPath,
+          Paint()
+            ..color = const Color(0xFF1B5E20)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = thickness * depthScale
+            ..strokeCap = StrokeCap.round,
         );
-        // Inner arm edge spine
-        canvas.drawLine(
-          Offset(dir * 28.0, sy),
-          Offset(dir * 22.0, sy - 2.5),
-          spinePaint,
+        // Mid green body
+        canvas.drawPath(
+          armPath,
+          Paint()
+            ..color = aCos >= 0
+                ? const Color(0xFF388E3C)
+                : const Color(0xFF2E7D32)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (thickness - 6.0) * depthScale
+            ..strokeCap = StrokeCap.round,
         );
+        // Sunlit 3D rib highlight
+        canvas.drawPath(
+          armPath,
+          Paint()
+            ..color = const Color(0xFF81C784)
+                .withValues(alpha: aCos >= 0 ? 0.68 : 0.35)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (thickness * 0.24) * depthScale
+            ..strokeCap = StrokeCap.round,
+        );
+
+        // Golden spines along the vertical upper arm
+        final Paint spinePaint = Paint()
+          ..color = const Color(0xFFFFF59D)
+          ..strokeWidth = 1.2
+          ..strokeCap = StrokeCap.round;
+        final double halfW = (thickness * 0.46) * depthScale;
+        final int spineCount = hasBudFlower ? 3 : 4;
+        for (int s = 0; s < spineCount; s++) {
+          final double frac = s / (spineCount - 0.5);
+          final double sy = elbowY + (tipY - elbowY) * frac;
+          canvas.drawLine(
+            Offset(reachX + halfW, sy),
+            Offset(reachX + halfW + 5.2, sy - 2.4),
+            spinePaint,
+          );
+          canvas.drawLine(
+            Offset(reachX - halfW, sy),
+            Offset(reachX - halfW - 5.2, sy - 2.4),
+            spinePaint,
+          );
+        }
+
+        // Pink desert flower bud on the 3rd arm tip (or King mode arm tips)
+        if (hasBudFlower) {
+          final Offset tipPos = Offset(
+            reachX,
+            tipY - (thickness * 0.48) * depthScale,
+          );
+          canvas.drawCircle(
+            tipPos,
+            4.4 * depthScale,
+            Paint()..color = const Color(0xFFFF80AB),
+          );
+          canvas.drawCircle(
+            tipPos,
+            2.1 * depthScale,
+            Paint()..color = const Color(0xFFFFEB3B),
+          );
+        } else if (styleMode == CoconutStyleMode.king) {
+          _drawNaturalBloomingFlower(
+            canvas,
+            Offset(reachX, tipY - (thickness * 0.50) * depthScale),
+          );
+        }
+
+        canvas.restore();
       }
-      // Spines along the lower curved horizontal elbow
-      canvas.drawLine(
-        Offset(dir * 22.0, 13.0),
-        Offset(dir * 25.0, 18.0),
-        spinePaint,
-      );
-      canvas.drawLine(
-        Offset(dir * 38.0, 6.0),
-        Offset(dir * 43.0, 11.0),
-        spinePaint,
-      );
-      canvas.drawLine(
-        Offset(dir * 51.0, -12.0),
-        Offset(dir * 57.0, -10.0),
-        spinePaint,
-      );
-
-      canvas.restore();
     }
 
-    // 3b. 3rd Smaller Upper-Right Cactus Arm Bud (attached at x = 23, y = -108)
-    canvas.save();
-    canvas.translate(23.0, -108.0);
-    canvas.rotate(armSway * 0.8);
-    final Path budPath = Path()
-      ..moveTo(0, 0)
-      ..quadraticBezierTo(22.0, 0, 24.0, -14.0)
-      ..lineTo(24.0, -30.0);
-    canvas.drawPath(
-      budPath,
-      Paint()
-        ..color = const Color(0xFF1B5E20)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 20.0
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.drawPath(
-      budPath,
-      Paint()
-        ..color = const Color(0xFF43A047)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 15.5
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.drawPath(
-      budPath,
-      Paint()
-        ..color = const Color(0xFFA5D6A7).withValues(alpha: 0.65)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4.5
-        ..strokeCap = StrokeCap.round,
-    );
-    // Attached spines along the vertical upper section of the 3rd arm bud (x = 24, radius = 10)
-    final Paint budSpinePaint = Paint()
-      ..color = const Color(0xFFFFF59D)
-      ..strokeWidth = 1.1;
-    for (final double bsy in [-16.0, -23.0, -30.0]) {
-      canvas.drawLine(Offset(33.0, bsy), Offset(38.0, bsy - 2.2), budSpinePaint);
-      canvas.drawLine(Offset(15.0, bsy), Offset(10.5, bsy - 2.2), budSpinePaint);
-    }
-    // Small pink desert flower bud on the 3rd arm tip
-    canvas.drawCircle(
-      const Offset(24.0, -40.0),
-      4.2,
-      Paint()..color = const Color(0xFFFF80AB),
-    );
-    canvas.drawCircle(
-      const Offset(24.0, -40.0),
-      2.0,
-      Paint()..color = const Color(0xFFFFEB3B),
-    );
-    canvas.restore();
+    // Helper to draw the orbiting Barrel Cactus (290°) & Prickly Pear Cluster (75°)
+    void drawOrbitingSideCacti({required bool frontPass}) {
+      // 1. Blooming Golden Barrel Cactus at 290°
+      final double barRad = (290.0 - cameraYaw) * math.pi / 180.0;
+      final double barCos = math.cos(barRad);
+      if ((barCos >= 0.0) == frontPass) {
+        final double bx = math.sin(barRad) * 46.0;
+        final double by = -2.0 + barCos * 7.5;
+        final double bScale = 0.88 + 0.14 * barCos;
+        canvas.save();
+        canvas.translate(bx, by);
+        canvas.scale(bScale);
+        canvas.drawOval(
+          Rect.fromCenter(center: Offset.zero, width: 30, height: 28),
+          Paint()
+            ..shader = ui.Gradient.radial(
+              const Offset(-4, -4),
+              18,
+              [const Color(0xFF81C784), const Color(0xFF2E7D32)],
+            ),
+        );
+        for (int br = 0; br < 6; br++) {
+          final double rRad = (br * 60.0 - cameraYaw) * math.pi / 180.0;
+          if (math.cos(rRad) <= -0.1) continue;
+          final double rx = math.sin(rRad) * 11.0;
+          canvas.drawLine(
+            Offset(rx * 0.5, -12),
+            Offset(rx, 11),
+            Paint()
+              ..color = const Color(0xFFFFF59D).withValues(alpha: 0.65)
+              ..strokeWidth = 1.1,
+          );
+        }
+        canvas.drawCircle(
+          const Offset(0, -14),
+          5.0,
+          Paint()..color = const Color(0xFFFFCA28),
+        );
+        canvas.drawCircle(
+          const Offset(0, -14),
+          2.4,
+          Paint()..color = const Color(0xFFFF6F00),
+        );
+        canvas.restore();
+      }
 
-    // 4. Main Center Saguaro Trunk with 3D Vertical Ribs & Fine Spines (trunk top at y = -152)
+      // 2. Prickly Pear Paddle Cluster with Magenta Blooms at 75°
+      final double pearRad = (75.0 - cameraYaw) * math.pi / 180.0;
+      final double pearCos = math.cos(pearRad);
+      if ((pearCos >= 0.0) == frontPass) {
+        final double px = math.sin(pearRad) * 44.0;
+        final double py = -4.0 + pearCos * 7.5;
+        final double pScale = 0.88 + 0.14 * pearCos;
+        canvas.save();
+        canvas.translate(px, py);
+        canvas.scale(pScale);
+        for (final List<double> pad in const [
+          [0.0, 0.0, 18.0, 22.0],
+          [11.0, -10.0, 14.0, 18.0],
+          [-6.0, -13.0, 13.0, 16.0],
+        ]) {
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: Offset(pad[0], pad[1]),
+              width: pad[2],
+              height: pad[3],
+            ),
+            Paint()..color = const Color(0xFF43A047),
+          );
+          canvas.drawCircle(
+            Offset(pad[0], pad[1] - pad[3] * 0.52),
+            3.2,
+            Paint()..color = const Color(0xFFFF4081),
+          );
+        }
+        canvas.restore();
+      }
+    }
+
+    // Back-hemisphere Saguaro arms & side cacti (behind main trunk)
+    drawOrbitingCactusArms(frontPass: false);
+    drawOrbitingSideCacti(frontPass: false);
+
+    // 4. Main Center Saguaro Trunk with 12 3D-Rotating Vertical Ribs & Fine Spines (trunk top at y = -152)
+    final double lightShiftX = math.sin(sunRelativeRad) * 14.0;
     final RRect trunkRect = RRect.fromRectAndRadius(
       const Rect.fromLTWH(-34, -152, 68, 160),
       const Radius.circular(34),
@@ -3219,102 +3297,65 @@ class DesertCactusWorldPainter extends CustomPainter {
       trunkRect,
       Paint()
         ..shader = ui.Gradient.linear(
-          const Offset(-34, -80),
-          const Offset(34, -80),
+          Offset(-34 + lightShiftX, -80),
+          Offset(34 + lightShiftX, -80),
           [
             const Color(0xFF66BB6A),
             const Color(0xFF2E7D32),
             const Color(0xFF1B5E20),
           ],
-          [0.0, 0.55, 1.0],
+          const [0.0, 0.55, 1.0],
         ),
     );
 
-    // 3D Vertical Ribs along the trunk
-    for (int r = -2; r <= 2; r++) {
-      final double rx = r * 11.8;
+    // 12 longitudinal 3D ribs rotating 360° around the cylindrical Saguaro trunk
+    for (int r = 0; r < 12; r++) {
+      final double rRad = (r * 30.0 - cameraYaw) * math.pi / 180.0;
+      final double rCos = math.cos(rRad);
+      if (rCos <= -0.08) continue;
+      final double rSin = math.sin(rRad);
+      final double rx = rSin * 31.0;
+      final double topArch = (1.0 - rCos) * 14.0;
+      final bool isSunlitRib = (rSin * math.sin(sunRelativeRad) + rCos * 0.4) >= 0;
+
       canvas.drawLine(
-        Offset(rx, -140 + r.abs() * 5.0),
+        Offset(rx, -142 + topArch),
         Offset(rx, 5),
         Paint()
-          ..color = r <= 0
-              ? const Color(0xFFA5D6A7).withValues(alpha: 0.55)
-              : const Color(0xFF0D3B10).withValues(alpha: 0.45)
-          ..strokeWidth = 2.5
+          ..color = (isSunlitRib
+                  ? const Color(0xFFA5D6A7)
+                  : const Color(0xFF0D3B10))
+              .withValues(alpha: (0.25 + 0.40 * rCos).clamp(0.0, 0.70))
+          ..strokeWidth = 2.4
           ..strokeCap = StrokeCap.round,
       );
 
-      // Fine spine clusters along each vertical rib
+      // Fine spine clusters along each rotating vertical rib pointing outward in 3D
+      final Paint spPaint = Paint()
+        ..color = const Color(0xFFFFF9C4)
+            .withValues(alpha: (0.40 + 0.48 * rCos).clamp(0.0, 0.90))
+        ..strokeWidth = 1.15;
       for (int sp = 0; sp < 7; sp++) {
         final double spy = -130.0 + sp * 19.0 + (r.isEven ? 0.0 : 7.0);
-        final Paint spPaint = Paint()
-          ..color = const Color(0xFFFFF9C4).withValues(alpha: 0.82)
-          ..strokeWidth = 1.15;
-        canvas.drawLine(Offset(rx, spy), Offset(rx - 4.2, spy - 2.8), spPaint);
-        canvas.drawLine(Offset(rx, spy), Offset(rx + 4.2, spy - 2.8), spPaint);
+        final double outX = rSin * 5.0;
+        canvas.drawLine(
+          Offset(rx, spy),
+          Offset(rx + outX - 2.6, spy - 2.8),
+          spPaint,
+        );
+        canvas.drawLine(
+          Offset(rx, spy),
+          Offset(rx + outX + 2.6, spy - 2.8),
+          spPaint,
+        );
       }
     }
 
-    // 4b. Blooming Golden Barrel Cactus at (-42, -4) & Prickly Pear Cluster at (40, -6)
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(-42, -4), width: 30, height: 28),
-      Paint()
-        ..shader = ui.Gradient.radial(
-          const Offset(-46, -8),
-          18,
-          [const Color(0xFF81C784), const Color(0xFF2E7D32)],
-        ),
-    );
-    for (int br = -2; br <= 2; br++) {
-      canvas.drawArc(
-        Rect.fromCenter(
-          center: Offset(-42.0 + br * 3.5, -4),
-          width: 10,
-          height: 26,
-        ),
-        -math.pi * 0.5,
-        math.pi,
-        false,
-        Paint()
-          ..color = const Color(0xFFFFF59D).withValues(alpha: 0.65)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.1,
-      );
-    }
-    // Golden crown blossom on the Barrel Cactus
-    canvas.drawCircle(
-      const Offset(-42, -18),
-      5.0,
-      Paint()..color = const Color(0xFFFFCA28),
-    );
-    canvas.drawCircle(
-      const Offset(-42, -18),
-      2.4,
-      Paint()..color = const Color(0xFFFF6F00),
-    );
+    // Front-hemisphere Saguaro arms & side cacti (in front of main trunk)
+    drawOrbitingCactusArms(frontPass: true);
+    drawOrbitingSideCacti(frontPass: true);
 
-    // Prickly Pear Paddle Cluster with Magenta Blooms nestled at (40, -6)
-    for (final List<double> pad in [
-      [40.0, -6.0, 18.0, 22.0],
-      [51.0, -16.0, 14.0, 18.0],
-      [34.0, -19.0, 13.0, 16.0],
-    ]) {
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(pad[0], pad[1]),
-          width: pad[2],
-          height: pad[3],
-        ),
-        Paint()..color = const Color(0xFF43A047),
-      );
-      canvas.drawCircle(
-        Offset(pad[0], pad[1] - pad[3] * 0.52),
-        3.2,
-        Paint()..color = const Color(0xFFFF4081),
-      );
-    }
-
-    // 4c. Organic Wind-Sculpted Sand Dune Ripple Nest (sandNest) tucking the Saguaro & side cacti directly into the continuous desert ground!
+    // 4c. Organic Wind-Sculpted Sand Dune Ripple Nest (sandNest)
     final Color nestTopColor = switch (atmosphereMode) {
       CoconutAtmosphereMode.sunset => const Color(0xFFE07A47),
       CoconutAtmosphereMode.night => const Color(0xFF1E2640),
@@ -3345,7 +3386,8 @@ class DesertCactusWorldPainter extends CustomPainter {
         ),
     );
 
-    // Wind-blown sand ripples & small red sandstone pebbles on the sandNest
+    // Wind-blown sand ripples shifting with cameraYaw
+    final double ripShift = math.sin(-cameraYaw * math.pi / 180.0) * 14.0;
     final Paint nestRipplePaint = Paint()
       ..color = const Color(0xFFFFE0B2).withValues(
         alpha: atmosphereMode == CoconutAtmosphereMode.night ? 0.14 : 0.34,
@@ -3354,38 +3396,43 @@ class DesertCactusWorldPainter extends CustomPainter {
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
     final Path ripple1 = Path()
-      ..moveTo(-64, 8)
-      ..quadraticBezierTo(-22, 2, 18, 7)
-      ..quadraticBezierTo(44, 10, 68, 6);
+      ..moveTo(-64 + ripShift * 0.4, 8)
+      ..quadraticBezierTo(-22 + ripShift, 2, 18 + ripShift, 7)
+      ..quadraticBezierTo(44, 10, 68 + ripShift * 0.4, 6);
     final Path ripple2 = Path()
-      ..moveTo(-46, 14)
-      ..quadraticBezierTo(0, 9, 48, 15);
+      ..moveTo(-46 - ripShift * 0.4, 14)
+      ..quadraticBezierTo(ripShift, 9, 48 - ripShift * 0.4, 15);
     canvas.drawPath(ripple1, nestRipplePaint);
     canvas.drawPath(ripple2, nestRipplePaint);
 
-    // Small red sandstone pebbles nestled in the sand
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(-56, 9), width: 18, height: 8),
-      Paint()..color = const Color(0xFF8D3B24),
-    );
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(-24, 11), width: 9, height: 4.5),
-      Paint()..color = const Color(0xFFA14A2E),
-    );
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(48, 10), width: 15, height: 7),
-      Paint()..color = const Color(0xFF9C3D26),
-    );
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(28, 13), width: 8, height: 4),
-      Paint()..color = const Color(0xFF8D3B24),
-    );
+    // Red sandstone pebbles orbiting 360° in the sand nest
+    const List<(double, double, double, double, Color)> pebbleSpecs = [
+      (245.0, 58.0, 18.0, 8.0, Color(0xFF8D3B24)),
+      (295.0, 32.0, 9.5, 4.5, Color(0xFFA14A2E)),
+      (65.0, 52.0, 15.0, 7.0, Color(0xFF9C3D26)),
+      (125.0, 38.0, 10.0, 4.5, Color(0xFF8D3B24)),
+      (190.0, 48.0, 13.0, 6.0, Color(0xFFA14A2E)),
+    ];
+    for (final (double deg, double dist, double pw, double ph, Color pc)
+        in pebbleSpecs) {
+      final double pRad = (deg - cameraYaw) * math.pi / 180.0;
+      final double px = math.sin(pRad) * dist;
+      final double py = 10.0 + math.cos(pRad) * 6.5;
+      canvas.drawOval(
+        Rect.fromCenter(center: Offset(px, py), width: pw, height: ph),
+        Paint()..color = pc,
+      );
+    }
 
-    // 4d. Animated Desert Horned Lizard / Gecko Basking at (-56, 6)
+    // 4d. Animated Desert Horned Lizard / Gecko Basking & Orbiting at 312°
+    final double geckoRad = (312.0 - cameraYaw) * math.pi / 180.0;
+    final double geckoX = math.sin(geckoRad) * 58.0;
+    final double geckoY = 8.0 + math.cos(geckoRad) * 8.0;
+    final double geckoDir = math.cos(geckoRad) >= 0 ? 1.0 : -1.0;
     final double geckoBob = math.sin(time * 3.8) * 1.4;
     canvas.save();
-    canvas.translate(-56.0, 6.0);
-    // Curving gecko tail
+    canvas.translate(geckoX, geckoY);
+    canvas.scale(geckoDir, 1.0);
     final Path geckoTail = Path()
       ..moveTo(-6, 1)
       ..quadraticBezierTo(-15, -2 + geckoBob, -19, 3);
@@ -3397,19 +3444,16 @@ class DesertCactusWorldPainter extends CustomPainter {
         ..strokeWidth = 2.2
         ..strokeCap = StrokeCap.round,
     );
-    // Little legs
     final Paint geckoLegPaint = Paint()
       ..color = const Color(0xFFB8863B)
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(const Offset(-3, 1), const Offset(-5, 5), geckoLegPaint);
     canvas.drawLine(const Offset(4, 1), const Offset(6, 5), geckoLegPaint);
-    // Patterned body
     canvas.drawOval(
       Rect.fromCenter(center: const Offset(0, 0), width: 14, height: 6.5),
       Paint()..color = const Color(0xFFE6B86A),
     );
-    // Head & cute horned crown bobbing in the sun
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(8.0, -2.0 + geckoBob * 0.6),
@@ -3425,7 +3469,7 @@ class DesertCactusWorldPainter extends CustomPainter {
     );
     canvas.restore();
 
-    // 5. Style-Specific Accessories on the Hero Saguaro Cactus
+    // 5. Style-Specific Accessories on the Hero Saguaro Cactus (all rotating 360° in 3D)
     switch (styleMode) {
       case CoconutStyleMode.natural:
         _drawNaturalBloomingFlower(canvas, const Offset(0, -154));
@@ -3448,11 +3492,13 @@ class DesertCactusWorldPainter extends CustomPainter {
   }
 
   void _drawNaturalBloomingFlower(Canvas canvas, Offset pos) {
+    final double yawRad = cameraYaw * math.pi / 180.0;
     for (int p = 0; p < 8; p++) {
-      final double angle = (p / 8.0) * math.pi * 2.0 + time * 0.3;
+      final double angle =
+          (p / 8.0) * math.pi * 2.0 + time * 0.3 - yawRad;
       final Offset petal = Offset(
-        pos.dx + math.cos(angle) * 11.0,
-        pos.dy + math.sin(angle) * 7.0,
+        pos.dx + math.sin(angle) * 11.5,
+        pos.dy + math.cos(angle) * 6.5,
       );
       canvas.drawCircle(petal, 6.5, Paint()..color = const Color(0xFFFF4081));
     }
@@ -3460,68 +3506,102 @@ class DesertCactusWorldPainter extends CustomPainter {
   }
 
   void _drawSheriffCowboyAccessories(Canvas canvas) {
-    // Western Leather Cowboy Hat on the crown
+    final double yawRad = (-cameraYaw) * math.pi / 180.0;
+    final double fSin = math.sin(yawRad);
+    final double fCos = math.cos(yawRad);
+
+    // Western Leather Cowboy Hat on the crown rotating in 3D
+    canvas.save();
+    canvas.translate(fSin * 3.0, -148);
+    canvas.rotate(fSin * 0.08);
     canvas.drawOval(
-      Rect.fromCenter(center: const Offset(0, -148), width: 108, height: 22),
+      Rect.fromCenter(center: Offset.zero, width: 108, height: 22),
       Paint()..color = const Color(0xFF6D4C41),
     );
+    final double creaseShift = fSin * 8.0;
     final Path hatCrown = Path()
-      ..moveTo(-32, -148)
-      ..quadraticBezierTo(-26, -186, -10, -178)
-      ..quadraticBezierTo(0, -172, 10, -178)
-      ..quadraticBezierTo(26, -186, 32, -148)
+      ..moveTo(-32, 0)
+      ..quadraticBezierTo(-26, -38, -10 + creaseShift * 0.5, -30)
+      ..quadraticBezierTo(creaseShift, -24, 10 + creaseShift * 0.5, -30)
+      ..quadraticBezierTo(26, -38, 32, 0)
       ..close();
     canvas.drawPath(hatCrown, Paint()..color = const Color(0xFF8D6E63));
     canvas.drawRect(
-      const Rect.fromLTWH(-30, -154, 60, 6),
+      const Rect.fromLTWH(-30, -6, 60, 6),
       Paint()..color = const Color(0xFF3E2723),
     );
+    canvas.restore();
 
-    // Cool Aviator Sunglasses
-    final Paint framePaint = Paint()
-      ..color = const Color(0xFFFFD54F)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4;
-    for (final double lx in [-14.0, 14.0]) {
-      final RRect lens = RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(lx, -116), width: 22, height: 16),
-        const Radius.circular(6),
-      );
-      canvas.drawRRect(lens, Paint()..color = const Color(0xFF102027));
-      canvas.drawRRect(lens, framePaint);
-    }
-    canvas.drawLine(const Offset(-3, -118), const Offset(3, -118), framePaint);
-
-    // Red Paisley Bandana around the neck
-    final Path bandana = Path()
+    // Red Paisley Bandana wrapping 360° around the neck (-88)
+    final Path bandanaRing = Path()
       ..moveTo(-34, -88)
-      ..quadraticBezierTo(0, -78, 34, -88)
-      ..lineTo(0, -58)
+      ..quadraticBezierTo(0, -82, 34, -88)
+      ..lineTo(34, -80)
+      ..quadraticBezierTo(0, -74, -34, -80)
       ..close();
-    canvas.drawPath(bandana, Paint()..color = const Color(0xFFD32F2F));
-
-    // Golden 6-Pointed Sheriff Star Badge on chest
-    final Offset badge = const Offset(16, -98);
-    final Path star = Path();
-    for (int i = 0; i < 12; i++) {
-      final double r = i.isEven ? 10.0 : 4.6;
-      final double a = (i / 12.0) * math.pi * 2.0 - math.pi * 0.5;
-      final Offset pt = Offset(
-        badge.dx + math.cos(a) * r,
-        badge.dy + math.sin(a) * r,
+    canvas.drawPath(bandanaRing, Paint()..color = const Color(0xFFD32F2F));
+    if (fCos >= -0.25) {
+      final double bx = fSin * 16.0;
+      final Path bandanaTriangle = Path()
+        ..moveTo(-30, -86)
+        ..quadraticBezierTo(bx, -78, 30, -86)
+        ..lineTo(bx, -58)
+        ..close();
+      canvas.drawPath(
+        bandanaTriangle,
+        Paint()..color = const Color(0xFFD32F2F),
       );
-      if (i == 0) {
-        star.moveTo(pt.dx, pt.dy);
-      } else {
-        star.lineTo(pt.dx, pt.dy);
-      }
     }
-    star.close();
-    canvas.drawPath(star, Paint()..color = const Color(0xFFFFD54F));
+
+    // Cool Aviator Sunglasses & Golden 6-Pointed Sheriff Star Badge rotating on front hemisphere
+    if (fCos > -0.15) {
+      final double faceX = fSin * 16.0;
+      final double scaleX = fCos.clamp(0.22, 1.0);
+      canvas.save();
+      canvas.translate(faceX, -116);
+      canvas.scale(scaleX, 1.0);
+      final Paint framePaint = Paint()
+        ..color = const Color(0xFFFFD54F)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.4;
+      for (final double lx in [-14.0, 14.0]) {
+        final RRect lens = RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(lx, 0), width: 22, height: 16),
+          const Radius.circular(6),
+        );
+        canvas.drawRRect(lens, Paint()..color = const Color(0xFF102027));
+        canvas.drawRRect(lens, framePaint);
+      }
+      canvas.drawLine(const Offset(-3, -2), const Offset(3, -2), framePaint);
+      canvas.restore();
+    }
+
+    final double badgeRad = (28.0 - cameraYaw) * math.pi / 180.0;
+    final double bCos = math.cos(badgeRad);
+    if (bCos > -0.10) {
+      final Offset badge = Offset(math.sin(badgeRad) * 24.0, -98);
+      final Path star = Path();
+      for (int i = 0; i < 12; i++) {
+        final double r = i.isEven ? 10.0 : 4.6;
+        final double a = (i / 12.0) * math.pi * 2.0 - math.pi * 0.5;
+        final Offset pt = Offset(
+          badge.dx + math.cos(a) * r * bCos.clamp(0.3, 1.0),
+          badge.dy + math.sin(a) * r,
+        );
+        if (i == 0) {
+          star.moveTo(pt.dx, pt.dy);
+        } else {
+          star.lineTo(pt.dx, pt.dy);
+        }
+      }
+      star.close();
+      canvas.drawPath(star, Paint()..color = const Color(0xFFFFD54F));
+    }
   }
 
   void _drawMariachiFiestaAccessories(Canvas canvas) {
-    // Colorful Embroidered Mexican Sombrero
+    final double yawRad = cameraYaw * math.pi / 180.0;
+    // Colorful Embroidered Mexican Sombrero with 12 rotating pom-poms around the brim
     canvas.drawOval(
       Rect.fromCenter(center: const Offset(0, -148), width: 132, height: 28),
       Paint()..color = const Color(0xFFFFCA28),
@@ -3533,13 +3613,23 @@ class DesertCactusWorldPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3.0,
     );
+    for (int p = 0; p < 12; p++) {
+      final double pRad = p * (math.pi / 6.0) - yawRad;
+      if (math.cos(pRad) < -0.2) continue;
+      canvas.drawCircle(
+        Offset(math.sin(pRad) * 60.0, -148.0 + math.cos(pRad) * 11.0),
+        2.8,
+        Paint()
+          ..color = p.isEven ? const Color(0xFFE53935) : const Color(0xFF00ACC1),
+      );
+    }
     final Path cone = Path()
       ..moveTo(-26, -150)
       ..quadraticBezierTo(0, -200, 26, -150)
       ..close();
     canvas.drawPath(cone, Paint()..color = const Color(0xFFFFB300));
 
-    // Festive Poncho Stripes across chest
+    // Festive Poncho Stripes & 3D rotating diamond embroidery across the trunk
     final List<Color> ponchoColors = [
       const Color(0xFFE53935),
       const Color(0xFFFFEB3B),
@@ -3552,83 +3642,104 @@ class DesertCactusWorldPainter extends CustomPainter {
         Paint()..color = ponchoColors[s],
       );
     }
+    for (int d = 0; d < 8; d++) {
+      final double dRad = (d * 45.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(dRad) <= 0.0) continue;
+      final double dx = math.sin(dRad) * 28.0;
+      canvas.drawCircle(
+        Offset(dx, -81.0),
+        2.5,
+        Paint()..color = Colors.white,
+      );
+    }
 
-    // Miniature Acoustic Guitar & Maraca
-    canvas.save();
-    canvas.translate(-20, -58);
-    canvas.rotate(-0.35);
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(0, 8), width: 24, height: 20),
-      Paint()..color = const Color(0xFFD84315),
-    );
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(0, -5), width: 18, height: 15),
-      Paint()..color = const Color(0xFFE64A19),
-    );
-    canvas.drawCircle(
-      const Offset(0, 1),
-      4.2,
-      Paint()..color = const Color(0xFF3E2723),
-    );
-    canvas.drawRect(
-      const Rect.fromLTWH(-2.2, -26, 4.4, 16),
-      Paint()..color = const Color(0xFF5D4037),
-    );
-    canvas.restore();
+    // Miniature Acoustic Guitar orbiting in 3D at 320°
+    final double gRad = (320.0 - cameraYaw) * math.pi / 180.0;
+    final double gCos = math.cos(gRad);
+    if (gCos > -0.35) {
+      final double gx = math.sin(gRad) * 26.0;
+      final double gScaleX = gCos.abs().clamp(0.38, 1.0);
+      canvas.save();
+      canvas.translate(gx, -56.0 + gCos * 4.0);
+      canvas.rotate(-0.35 * gScaleX);
+      canvas.scale(gScaleX, 1.0);
+      canvas.drawOval(
+        Rect.fromCenter(center: const Offset(0, 8), width: 24, height: 20),
+        Paint()..color = const Color(0xFFD84315),
+      );
+      canvas.drawOval(
+        Rect.fromCenter(center: const Offset(0, -5), width: 18, height: 15),
+        Paint()..color = const Color(0xFFE64A19),
+      );
+      canvas.drawCircle(
+        const Offset(0, 1),
+        4.2,
+        Paint()..color = const Color(0xFF3E2723),
+      );
+      canvas.drawRect(
+        const Rect.fromLTWH(-2.2, -26, 4.4, 16),
+        Paint()..color = const Color(0xFF5D4037),
+      );
+      canvas.restore();
+    }
   }
 
   void _drawOasisEmperorAccessories(Canvas canvas) {
-    // Gleaming Pharaoh / Sultan Golden Crown with Turquoise & Ruby Jewels
-    final Path crown = Path()
+    // Gleaming 3D Rotating Pharaoh / Sultan Golden Crown with 8 rotating points & jewels
+    final Path crownBand = Path()
       ..moveTo(-28, -148)
-      ..lineTo(-32, -178)
-      ..lineTo(-15, -163)
-      ..lineTo(0, -184)
-      ..lineTo(15, -163)
-      ..lineTo(32, -178)
+      ..lineTo(-30, -160)
+      ..lineTo(30, -160)
       ..lineTo(28, -148)
       ..close();
     canvas.drawPath(
-      crown,
+      crownBand,
       Paint()
         ..shader = ui.Gradient.linear(
-          const Offset(-28, -184),
+          const Offset(-28, -160),
           const Offset(28, -148),
           [const Color(0xFFFFF176), const Color(0xFFFF8F00)],
         ),
     );
-    canvas.drawCircle(
-      const Offset(0, -161),
-      4.8,
-      Paint()..color = const Color(0xFF00E5FF),
-    );
-    canvas.drawCircle(
-      const Offset(-15, -156),
-      3.6,
-      Paint()..color = const Color(0xFFE91E63),
-    );
-    canvas.drawCircle(
-      const Offset(15, -156),
-      3.6,
-      Paint()..color = const Color(0xFFE91E63),
-    );
+    for (int k = 0; k < 8; k++) {
+      final double kRad = (k * 45.0 - cameraYaw) * math.pi / 180.0;
+      final double kCos = math.cos(kRad);
+      if (kCos < -0.20) continue;
+      final double kx = math.sin(kRad) * 26.0;
+      final Path spike = Path()
+        ..moveTo(kx - 5.5, -158)
+        ..lineTo(kx, -180 - (k.isEven ? 4.0 : 0.0))
+        ..lineTo(kx + 5.5, -158)
+        ..close();
+      canvas.drawPath(spike, Paint()..color = const Color(0xFFFFD54F));
+      if (kCos > 0.0) {
+        canvas.drawCircle(
+          Offset(kx, -154),
+          3.4 * kCos.clamp(0.4, 1.0),
+          Paint()
+            ..color =
+                k.isEven ? const Color(0xFF00E5FF) : const Color(0xFFE91E63),
+        );
+      }
+    }
 
-    // Blooming magenta flowers on both arms
-    _drawNaturalBloomingFlower(canvas, const Offset(-67, -134));
-    _drawNaturalBloomingFlower(canvas, const Offset(67, -122));
-
-    // Hovering Emerald Hummingbird sipping nectar near the crown
+    // Hovering Emerald Hummingbird orbiting the crown in 3D
+    final double hbRad = (60.0 - cameraYaw) * math.pi / 180.0 + time * 0.6;
     final Offset hb = Offset(
-      52.0 + math.sin(time * 4.2) * 6.0,
-      -162.0 + math.cos(time * 5.4) * 5.0,
+      math.sin(hbRad) * 54.0,
+      -162.0 + math.cos(hbRad) * 8.0 + math.cos(time * 5.4) * 4.0,
     );
+    final double hbDir = math.sin(hbRad) >= 0 ? 1.0 : -1.0;
+    canvas.save();
+    canvas.translate(hb.dx, hb.dy);
+    canvas.scale(hbDir, 1.0);
     canvas.drawOval(
-      Rect.fromCenter(center: hb, width: 14, height: 7),
+      Rect.fromCenter(center: Offset.zero, width: 14, height: 7),
       Paint()..color = const Color(0xFF00BFA5),
     );
     canvas.drawLine(
-      Offset(hb.dx - 7, hb.dy),
-      Offset(hb.dx - 18, hb.dy + 2),
+      const Offset(-7, 0),
+      const Offset(-18, 2),
       Paint()
         ..color = const Color(0xFF263238)
         ..strokeWidth = 1.4,
@@ -3636,20 +3747,24 @@ class DesertCactusWorldPainter extends CustomPainter {
     final double wingBlur = math.sin(time * 24.0) * 8.0;
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(hb.dx + 2, hb.dy - 6 + wingBlur * 0.3),
+        center: Offset(2, -6 + wingBlur * 0.3),
         width: 12,
         height: 6,
       ),
       Paint()..color = const Color(0xFF80CBC4).withValues(alpha: 0.75),
     );
+    canvas.restore();
   }
 
   void _drawLofiMirageAccessories(Canvas canvas) {
-    // Giant Retro Headphones arching over the cactus crown & ear cups
+    final double yawRad = cameraYaw * math.pi / 180.0;
+    // Giant Retro Headphones arching over the cactus crown & 3D rotating ear cups (270° and 90°)
+    final double bandWidth =
+        (86.0 * math.cos(yawRad).abs()).clamp(26.0, 86.0);
     canvas.drawArc(
       Rect.fromCenter(
         center: const Offset(0, -118),
-        width: 86,
+        width: bandWidth,
         height: 90,
       ),
       math.pi * 1.02,
@@ -3661,11 +3776,14 @@ class DesertCactusWorldPainter extends CustomPainter {
         ..strokeWidth = 7.0
         ..strokeCap = StrokeCap.round,
     );
-    for (final int dir in [-1, 1]) {
+    for (final double earDeg in [270.0, 90.0]) {
+      final double eRad = earDeg * math.pi / 180.0 - yawRad;
+      final double ex = math.sin(eRad) * 39.0;
+      final double ey = -114.0 + math.cos(eRad) * 3.5;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
-            center: Offset(dir * 39.0, -114.0),
+            center: Offset(ex, ey),
             width: 15,
             height: 32,
           ),
@@ -3676,7 +3794,7 @@ class DesertCactusWorldPainter extends CustomPainter {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
-            center: Offset(dir * 35.0, -114.0),
+            center: Offset(ex * 0.90, ey),
             width: 6.5,
             height: 26,
           ),
@@ -3686,12 +3804,13 @@ class DesertCactusWorldPainter extends CustomPainter {
       );
     }
 
-    // Floating synthwave musical notes
+    // Floating synthwave musical notes orbiting in 3D
     for (int n = 0; n < 3; n++) {
       final double p = (time * 0.45 + n * 0.33) % 1.0;
+      final double nRad = (n * 120.0 + 45.0 - cameraYaw) * math.pi / 180.0;
       final double nx =
-          (n.isEven ? 1 : -1) * (50.0 + math.sin(time * 2.5 + n) * 10.0);
-      final double ny = -128.0 - p * 58.0;
+          math.sin(nRad) * (50.0 + math.sin(time * 2.5 + n) * 8.0);
+      final double ny = -128.0 - p * 58.0 + math.cos(nRad) * 6.0;
       final double alpha = math.sin(p * math.pi).clamp(0.0, 1.0);
       canvas.drawCircle(
         Offset(nx, ny),

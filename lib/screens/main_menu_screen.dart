@@ -12,7 +12,6 @@ import '../painters/desert_cactus_world_painter.dart';
 import '../painters/pine_forest_world_painter.dart';
 import '../painters/street_lamp_world_painter.dart';
 import '../painters/zen_valley_world_painter.dart';
-import '../painters/zenverse_shader_painter.dart';
 import '../services/audio_service.dart';
 import '../services/storage_service.dart';
 import 'coconut_simulator_screen.dart';
@@ -43,7 +42,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     CologneChristmasAssets.ensureLoaded();
-    ZenVerseShaderPainter.preloadShader();
 
     _selectedIndex = StorageService.instance.loadSelectedWorldIndex(
       maxCount: availableSimulators.length,
@@ -289,14 +287,10 @@ class _MainMenuScreenState extends State<MainMenuScreen>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // 1. Isolated 60 FPS Live 360° Background Preview Canvas + GPU Shader & 3D Parallax
+                // 1. Isolated 60 FPS Live 360° Background Preview Canvas
                 RepaintBoundary(
                   child: CustomPaint(
                     painter: _buildPreviewPainter(activeSim),
-                    foregroundPainter: ZenVerseShaderPainter(
-                      controller: _previewController,
-                      simulatorId: activeSim.id,
-                    ),
                     size: Size.infinite,
                   ),
                 ),
@@ -571,20 +565,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   HapticFeedback.selectionClick();
                   setState(() {
                     _previewController.setAutoOrbitPreview(!autoOrbitPreview);
-                  });
-                },
-              ),
-              _buildPreviewControlPill(
-                label: switch (_previewController.shaderMode) {
-                  ZenVerseShaderMode.cinematicGodRays => '✨ Shader: Işık & 3B',
-                  ZenVerseShaderMode.auroraDream => '🌌 Shader: Aurora',
-                  ZenVerseShaderMode.cozyRefraction => '💧 Shader: Mercek',
-                  ZenVerseShaderMode.off => '🚫 Shader: Kapalı',
-                },
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() {
-                    _previewController.cycleShaderMode();
                   });
                 },
               ),

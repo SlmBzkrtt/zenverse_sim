@@ -2906,7 +2906,119 @@ class PineForestWorldPainter extends CustomPainter {
         ),
     );
 
+    // Helper to draw the 4 orbiting base props around the snow mound (sorted back/front by cos)
+    void drawBaseProps({required bool frontPass}) {
+      // A. Snow-Dusted Granite Stones at azimuth 225°
+      final double stoneRad = (225.0 - cameraYaw) * math.pi / 180.0;
+      if ((math.cos(stoneRad) >= 0) == frontPass) {
+        final double sx = math.sin(stoneRad) * 32.0;
+        final double sy = 9.5 + math.cos(stoneRad) * 4.5;
+        canvas.drawOval(
+          Rect.fromCenter(center: Offset(sx, sy), width: 15, height: 8.5),
+          Paint()..color = const Color(0xFF546E7A),
+        );
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(sx - 1.0, sy - 2.2),
+            width: 11,
+            height: 4.2,
+          ),
+          Paint()..color = Colors.white,
+        );
+      }
+
+      // B. Red-Cap Amanita Mushroom at azimuth 135°
+      final double mushRad = (135.0 - cameraYaw) * math.pi / 180.0;
+      if ((math.cos(mushRad) >= 0) == frontPass) {
+        final double mx = math.sin(mushRad) * 30.0;
+        final double my = 9.0 + math.cos(mushRad) * 4.5;
+        canvas.drawRect(
+          Rect.fromLTWH(mx - 1.5, my - 5.0, 3, 6),
+          Paint()..color = const Color(0xFFFFF8E1),
+        );
+        canvas.drawArc(
+          Rect.fromLTWH(mx - 5.5, my - 10.0, 11, 9),
+          math.pi,
+          math.pi,
+          true,
+          Paint()..color = const Color(0xFFD32F2F),
+        );
+        canvas.drawCircle(
+          Offset(mx - 1.8, my - 7.5),
+          1.1,
+          Paint()..color = Colors.white,
+        );
+        canvas.drawCircle(
+          Offset(mx + 1.8, my - 6.8),
+          0.9,
+          Paint()..color = Colors.white,
+        );
+      }
+
+      // C. Cute Animated Squirrel holding an Acorn at azimuth 315°
+      final double sqRad = (315.0 - cameraYaw) * math.pi / 180.0;
+      if ((math.cos(sqRad) >= 0) == frontPass) {
+        final double sqX = math.sin(sqRad) * 42.0;
+        final double sqY =
+            9.0 + math.cos(sqRad) * 5.5 + math.sin(time * 4.2) * 1.4;
+        final double faceDir = math.cos(sqRad) >= 0 ? 1.0 : -1.0;
+        canvas.save();
+        canvas.translate(sqX, sqY);
+        canvas.scale(faceDir, 1.0);
+        final Path sqTail = Path()
+          ..moveTo(-6, 1)
+          ..quadraticBezierTo(-17, -11, -8, -16)
+          ..quadraticBezierTo(-2, -14, -3, 0)
+          ..close();
+        canvas.drawPath(sqTail, Paint()..color = const Color(0xFFD84315));
+        canvas.drawOval(
+          Rect.fromCenter(center: const Offset(0, -3), width: 10, height: 11),
+          Paint()..color = const Color(0xFFBF360C),
+        );
+        canvas.drawCircle(
+          const Offset(2.5, -10),
+          4.0,
+          Paint()..color = const Color(0xFFD84315),
+        );
+        canvas.drawCircle(
+          const Offset(6.5, -5.5),
+          2.6,
+          Paint()..color = const Color(0xFF5D4037),
+        );
+        canvas.restore();
+      }
+
+      // D. Warm Glowing Brass Expedition Lantern at azimuth 45°
+      final double lanRad = (45.0 - cameraYaw) * math.pi / 180.0;
+      if ((math.cos(lanRad) >= 0) == frontPass) {
+        final double lx = math.sin(lanRad) * 40.0;
+        final double ly = 8.5 + math.cos(lanRad) * 5.5;
+        canvas.drawCircle(
+          Offset(lx, ly - 6),
+          10.0,
+          Paint()
+            ..color = const Color(0xFFFFEA00).withValues(alpha: 0.42)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(lx - 4, ly - 12, 8, 12),
+            const Radius.circular(2),
+          ),
+          Paint()..color = const Color(0xFF4E342E),
+        );
+        canvas.drawRect(
+          Rect.fromLTWH(lx - 2.5, ly - 10, 5, 7),
+          Paint()..color = const Color(0xFFFFF59D),
+        );
+      }
+    }
+
+    // Draw back-hemisphere base props before the trunk
+    drawBaseProps(frontPass: false);
+
     // 2. Thick Textured Timber Trunk starting at (0, 12) and tapering up into the boughs
+    final double lightShiftX = math.sin(sunRelativeRad) * 10.0;
     final Path trunkPath = Path()
       ..moveTo(-24, 12)
       ..quadraticBezierTo(-14, -4, -11, -58)
@@ -2917,35 +3029,58 @@ class PineForestWorldPainter extends CustomPainter {
       trunkPath,
       Paint()
         ..shader = ui.Gradient.linear(
-          const Offset(-18, 0),
-          const Offset(18, 0),
+          Offset(-18 + lightShiftX, 0),
+          Offset(18 + lightShiftX, 0),
           [
-            const Color(0xFF795548),
-            const Color(0xFF4E342E),
+            const Color(0xFF8D6E63),
+            const Color(0xFF5D4037),
             const Color(0xFF3E2723),
           ],
           const [0.0, 0.55, 1.0],
         ),
     );
 
+    // 3D Rotating Cylindrical Bark Grooves & Owl Knot Hollow around the trunk!
     final Paint barkLine = Paint()
-      ..color = const Color(0xFF271815).withValues(alpha: 0.55)
+      ..color = const Color(0xFF271815).withValues(alpha: 0.58)
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round;
-    for (int b = -2; b <= 2; b++) {
-      canvas.drawLine(
-        Offset(b * 3.5, -48),
-        Offset(b * 5.2, 8),
-        barkLine,
+    final Paint barkHighlight = Paint()
+      ..color = const Color(0xFFA1887F).withValues(alpha: 0.35)
+      ..strokeWidth = 1.3
+      ..strokeCap = StrokeCap.round;
+    for (int b = 0; b < 10; b++) {
+      final double barkRad = (b * 36.0 - cameraYaw) * math.pi / 180.0;
+      if (math.cos(barkRad) > -0.1) {
+        final double s = math.sin(barkRad);
+        canvas.drawLine(
+          Offset(s * 10.5, -48),
+          Offset(s * 18.5, 8),
+          b.isEven ? barkLine : barkHighlight,
+        );
+      }
+    }
+    // 3D Rotating Bark Knot on the trunk at azimuth 20°
+    final double knotRad = (20.0 - cameraYaw) * math.pi / 180.0;
+    if (math.cos(knotRad) > 0.15) {
+      final double kx = math.sin(knotRad) * 12.0;
+      final double kSquash = math.cos(knotRad).clamp(0.25, 1.0);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(kx, -14),
+          width: 7.5 * kSquash,
+          height: 10.0,
+        ),
+        Paint()..color = const Color(0xFF271815),
       );
     }
 
-    // 3. Soft Organic Snowdrift Mound (snowNest) tucking the base of the trunk (y = 4..18)
-    //    directly into the continuous foreground snow!
+    // 3. Soft Organic Snowdrift Mound (snowNest) tucking the base of the trunk
+    final double moundShift = math.sin((-cameraYaw) * math.pi / 180.0) * 6.0;
     final Path snowNest = Path()
       ..moveTo(-78, 15)
-      ..quadraticBezierTo(-34, 0, 0, 5)
-      ..quadraticBezierTo(34, 0, 78, 15)
+      ..quadraticBezierTo(-34 + moundShift, 0, moundShift * 0.5, 5)
+      ..quadraticBezierTo(34 + moundShift, 0, 78, 15)
       ..quadraticBezierTo(0, 22, -78, 15)
       ..close();
     canvas.drawPath(
@@ -2955,11 +3090,10 @@ class PineForestWorldPainter extends CustomPainter {
             ? const Color(0xFF173447)
             : const Color(0xFFD6EEF9),
     );
-    // Crisp white snow crest along the top of the root snowdrift
     final Path snowNestCrest = Path()
       ..moveTo(-64, 13)
-      ..quadraticBezierTo(-26, 2, 0, 6)
-      ..quadraticBezierTo(26, 2, 64, 13);
+      ..quadraticBezierTo(-26 + moundShift, 2, moundShift * 0.5, 6)
+      ..quadraticBezierTo(26 + moundShift, 2, 64, 13);
     canvas.drawPath(
       snowNestCrest,
       Paint()
@@ -2970,95 +3104,24 @@ class PineForestWorldPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
-    // 2 Small Snow-Dusted Granite Stones & Red-Cap Mushroom nestled in the snow beside the trunk
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(-24, 12), width: 14, height: 8),
-      Paint()..color = const Color(0xFF546E7A),
-    );
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(-25, 9.5), width: 10, height: 4),
-      Paint()..color = Colors.white,
-    );
-    canvas.drawRect(
-      const Rect.fromLTWH(20, 7, 3, 6),
-      Paint()..color = const Color(0xFFFFF8E1),
-    );
-    canvas.drawArc(
-      const Rect.fromLTWH(16, 2, 11, 9),
-      math.pi,
-      math.pi,
-      true,
-      Paint()..color = const Color(0xFFD32F2F),
-    );
-    canvas.drawCircle(
-      const Offset(20, 4),
-      1.0,
-      Paint()..color = Colors.white,
-    );
-    canvas.drawCircle(
-      const Offset(23, 5),
-      0.9,
-      Paint()..color = Colors.white,
-    );
+    // Draw front-hemisphere base props in front of the snow mound
+    drawBaseProps(frontPass: true);
 
-    // Cute Animated Squirrel holding an Acorn sitting naturally on the snow at (-38, 10)
-    final double sqBob = math.sin(time * 4.2) * 1.4;
-    canvas.save();
-    canvas.translate(-38, 10 + sqBob);
-    final Path sqTail = Path()
-      ..moveTo(-6, 1)
-      ..quadraticBezierTo(-17, -11, -8, -16)
-      ..quadraticBezierTo(-2, -14, -3, 0)
-      ..close();
-    canvas.drawPath(sqTail, Paint()..color = const Color(0xFFD84315));
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(0, -3), width: 10, height: 11),
-      Paint()..color = const Color(0xFFBF360C),
-    );
-    canvas.drawCircle(
-      const Offset(2.5, -10),
-      4.0,
-      Paint()..color = const Color(0xFFD84315),
-    );
-    canvas.drawCircle(
-      const Offset(6.5, -5.5),
-      2.6,
-      Paint()..color = const Color(0xFF5D4037),
-    );
-    canvas.restore();
-
-    // Warm Glowing Brass Expedition Lantern sitting naturally on the snow at (36, 8)
-    canvas.drawCircle(
-      const Offset(36, 2),
-      10.0,
-      Paint()
-        ..color = const Color(0xFFFFEA00).withValues(alpha: 0.42)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(32, -4, 8, 12),
-        const Radius.circular(2),
-      ),
-      Paint()..color = const Color(0xFF4E342E),
-    );
-    canvas.drawRect(
-      const Rect.fromLTWH(33.5, -2, 5, 7),
-      Paint()..color = const Color(0xFFFFF59D),
-    );
-
-    // 4. 6 Lush Overlapping Tiers of Pine Boughs (-24 up to -140)
+    // 4. 6 Lush Overlapping Tiers of Pine Boughs (-24 up to -140) with 3D Rotating Lobes & Pine Cones!
     for (int tier = 0; tier < 6; tier++) {
       final double ty = -24.0 - tier * 18.5;
       final double tw = 74.0 - tier * 10.5;
       final double th = 36.0 - tier * 2.5;
       final double tSway = sway * (0.18 * (tier + 1));
+      final double tierYawPhase =
+          (-cameraYaw * math.pi / 180.0) + tier * 0.55;
+      final double rotShift = math.sin(tierYawPhase) * (tw * 0.08);
 
       // Deep shadow under-foliage layer for 3D volume
       final Path underLayer = Path()
         ..moveTo(tSway, ty - th + 4)
         ..lineTo(tSway * 0.5 - tw * 1.02, ty + 3)
-        ..lineTo(tSway * 0.5, ty + 7)
+        ..lineTo(tSway * 0.5 + rotShift, ty + 8)
         ..lineTo(tSway * 0.5 + tw * 1.02, ty + 3)
         ..close();
       canvas.drawPath(
@@ -3069,7 +3132,7 @@ class PineForestWorldPainter extends CustomPainter {
               : const Color(0xFF0F291E),
       );
 
-      // Serrated 3D Scandinavian pine needle bough
+      // Serrated 3D Scandinavian pine needle bough with rotating serration tips
       final Path needleLayer = Path()
         ..moveTo(tSway, ty - th)
         ..quadraticBezierTo(
@@ -3077,15 +3140,19 @@ class PineForestWorldPainter extends CustomPainter {
           ty - th * 0.38,
           tSway * 0.5 - tw,
           ty,
-        )
-        ..lineTo(tSway * 0.5 - tw * 0.65, ty - 4)
-        ..lineTo(tSway * 0.5 - tw * 0.38, ty + 4)
-        ..lineTo(tSway * 0.5 - tw * 0.15, ty - 3)
-        ..lineTo(tSway * 0.5, ty + 5)
-        ..lineTo(tSway * 0.5 + tw * 0.15, ty - 3)
-        ..lineTo(tSway * 0.5 + tw * 0.38, ty + 4)
-        ..lineTo(tSway * 0.5 + tw * 0.65, ty - 4)
-        ..lineTo(tSway * 0.5 + tw, ty)
+        );
+
+      // 7 bottom serration tips that shift horizontally as the tree rotates 360°
+      for (int s = 0; s <= 6; s++) {
+        final double frac = (s / 6.0) * 2.0 - 1.0; // -1.0 .. +1.0
+        final double wave =
+            math.sin(frac * math.pi * 2.5 - cameraYaw * math.pi / 180.0);
+        final double px = tSway * 0.5 + frac * tw;
+        final double py = ty + wave * 4.2 + (1.0 - frac.abs()) * 3.5;
+        needleLayer.lineTo(px, py);
+      }
+
+      needleLayer
         ..quadraticBezierTo(
           tSway + tw * 0.42,
           ty - th * 0.38,
@@ -3098,8 +3165,8 @@ class PineForestWorldPainter extends CustomPainter {
         needleLayer,
         Paint()
           ..shader = ui.Gradient.linear(
-            Offset(-tw, ty - th * 0.5),
-            Offset(tw, ty),
+            Offset(-tw + lightShiftX * 2.2, ty - th * 0.5),
+            Offset(tw + lightShiftX * 2.2, ty),
             isNight
                 ? [
                     const Color(0xFF26856E),
@@ -3115,7 +3182,28 @@ class PineForestWorldPainter extends CustomPainter {
           ),
       );
 
-      // Thick White Snow Cushions resting on every pine bough!
+      // 3D Rotating Branch Needle Ridges across the bough cone
+      final Paint ridgePaint = Paint()
+        ..color = (isNight ? const Color(0xFF4DB6AC) : const Color(0xFF74C69D))
+            .withValues(alpha: 0.32)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6
+        ..strokeCap = StrokeCap.round;
+      for (int r = 0; r < 8; r++) {
+        final double rRad =
+            (r * 45.0 + tier * 20.0 - cameraYaw) * math.pi / 180.0;
+        if (math.cos(rRad) > 0.0) {
+          final double rx = tSway * 0.5 + math.sin(rRad) * tw * 0.85;
+          final double ry = ty + math.cos(rRad) * 3.5;
+          canvas.drawLine(
+            Offset(tSway, ty - th * 0.82),
+            Offset(rx, ry),
+            ridgePaint,
+          );
+        }
+      }
+
+      // Thick White Snow Cushions resting on every pine bough (rotating lobes with cameraYaw!)
       final Path snowCushion = Path()
         ..moveTo(tSway, ty - th)
         ..quadraticBezierTo(
@@ -3125,14 +3213,14 @@ class PineForestWorldPainter extends CustomPainter {
           ty - th * 0.15,
         )
         ..quadraticBezierTo(
-          tSway * 0.6 - tw * 0.35,
-          ty - th * 0.04,
-          tSway * 0.6,
+          tSway * 0.6 - tw * 0.35 + rotShift,
+          ty - th * 0.02,
+          tSway * 0.6 + rotShift,
           ty - th * 0.12,
         )
         ..quadraticBezierTo(
-          tSway * 0.6 + tw * 0.35,
-          ty - th * 0.04,
+          tSway * 0.6 + tw * 0.35 + rotShift,
+          ty - th * 0.02,
           tSway * 0.6 + tw * 0.78,
           ty - th * 0.15,
         )
@@ -3152,53 +3240,78 @@ class PineForestWorldPainter extends CustomPainter {
               .withValues(alpha: 0.94),
       );
 
-      // 10 Detailed Hanging Pine Cones across tiers 0..4
+      // 3D Orbiting Hanging Pine Cones around each tier (6 cones per tier in 360°)
       if (tier < 5) {
-        for (final side in [-1.0, 1.0]) {
-          final Offset conePos = Offset(
-            tSway * 0.5 + side * tw * 0.48,
-            ty + 2.5,
-          );
-          canvas.drawOval(
-            Rect.fromCenter(center: conePos, width: 7, height: 10.5),
-            Paint()..color = const Color(0xFF4E342E),
-          );
-          canvas.drawOval(
-            Rect.fromCenter(
-              center: conePos.translate(-1.0, -1.5),
-              width: 4,
-              height: 5.5,
-            ),
-            Paint()..color = const Color(0xFF8D6E63),
-          );
+        for (int c = 0; c < 6; c++) {
+          final double coneRad =
+              (c * 60.0 + tier * 28.0 - cameraYaw) * math.pi / 180.0;
+          final double depth = math.cos(coneRad);
+          if (depth > -0.1) {
+            final Offset conePos = Offset(
+              tSway * 0.5 + math.sin(coneRad) * tw * 0.76,
+              ty + 1.5 + depth * 4.2,
+            );
+            final double coneScale = 0.78 + 0.22 * depth.clamp(0.0, 1.0);
+            canvas.drawOval(
+              Rect.fromCenter(
+                center: conePos,
+                width: 7.0 * coneScale,
+                height: 10.5 * coneScale,
+              ),
+              Paint()..color = const Color(0xFF4E342E),
+            );
+            canvas.drawOval(
+              Rect.fromCenter(
+                center: conePos.translate(-1.0 * coneScale, -1.5 * coneScale),
+                width: 4.0 * coneScale,
+                height: 5.5 * coneScale,
+              ),
+              Paint()..color = const Color(0xFF8D6E63),
+            );
+          }
         }
       }
     }
 
-    // 5. Style-Specific Accessories on the Center Pine Tree (reaching up to -155)
+    // 5. Style-Specific 3D Rotating Accessories on the Center Pine Tree
+    final double frontRad = (15.0 - cameraYaw) * math.pi / 180.0;
+    final double frontSin = math.sin(frontRad);
+    final double frontCos = math.cos(frontRad);
+
     switch (styleMode) {
       case CoconutStyleMode.natural:
-        // Perched Red Cardinal Bird on middle branch
-        final Offset birdPos = Offset(sway * 0.6 + 32, -78);
-        canvas.drawOval(
-          Rect.fromCenter(center: birdPos, width: 13, height: 9.5),
-          Paint()..color = const Color(0xFFD32F2F),
-        );
-        final Path crest = Path()
-          ..moveTo(birdPos.dx - 3, birdPos.dy - 4)
-          ..lineTo(birdPos.dx + 1.5, birdPos.dy - 10)
-          ..lineTo(birdPos.dx + 4, birdPos.dy - 3)
-          ..close();
-        canvas.drawPath(crest, Paint()..color = const Color(0xFFB71C1C));
-        canvas.drawCircle(
-          birdPos.translate(4, -1.5),
-          1.3,
-          Paint()..color = Colors.black,
-        );
+        // Perched Red Cardinal Bird at azimuth 35° & Mountain Bluebird at azimuth 215°
+        for (final (double birdAz, Color bodyCol, Color crestCol) in const [
+          (35.0, Color(0xFFD32F2F), Color(0xFFB71C1C)),
+          (215.0, Color(0xFF29B6F6), Color(0xFF0277BD)),
+        ]) {
+          final double bRad = (birdAz - cameraYaw) * math.pi / 180.0;
+          if (math.cos(bRad) > -0.15) {
+            final Offset birdPos = Offset(
+              sway * 0.6 + math.sin(bRad) * 36.0,
+              -78.0 + math.cos(bRad) * 4.0,
+            );
+            canvas.drawOval(
+              Rect.fromCenter(center: birdPos, width: 13, height: 9.5),
+              Paint()..color = bodyCol,
+            );
+            final Path crest = Path()
+              ..moveTo(birdPos.dx - 3, birdPos.dy - 4)
+              ..lineTo(birdPos.dx + 1.5, birdPos.dy - 10)
+              ..lineTo(birdPos.dx + 4, birdPos.dy - 3)
+              ..close();
+            canvas.drawPath(crest, Paint()..color = crestCol);
+            canvas.drawCircle(
+              birdPos.translate(4, -1.5),
+              1.3,
+              Paint()..color = Colors.black,
+            );
+          }
+        }
         break;
 
       case CoconutStyleMode.arcade:
-        // Red knitted winter beanie hat on the top peak + cool ski goggles/sunglasses & grin
+        // Red knitted winter beanie hat on the top peak + 3D rotating ski goggles & grin
         final double topX = sway * 1.08;
         canvas.drawArc(
           Rect.fromCenter(
@@ -3223,53 +3336,64 @@ class PineForestWorldPainter extends CustomPainter {
           Paint()..color = const Color(0xFFFFF8E1),
         );
         canvas.drawCircle(
-          Offset(topX, -152),
+          Offset(topX + frontSin * 3.0, -152),
           6.5,
           Paint()..color = Colors.white,
         );
 
-        final double midX = sway * 0.65;
-        final Paint framePaint = Paint()..color = const Color(0xFF111111);
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(midX - 28, -94, 24, 15),
-            const Radius.circular(4),
-          ),
-          framePaint,
-        );
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(midX + 4, -94, 24, 15),
-            const Radius.circular(4),
-          ),
-          framePaint,
-        );
-        canvas.drawLine(
-          Offset(midX - 4, -88),
-          Offset(midX + 4, -88),
-          Paint()
-            ..color = const Color(0xFFFFD54F)
-            ..strokeWidth = 2.5,
-        );
-        canvas.drawArc(
-          Rect.fromCenter(
-            center: Offset(midX, -70),
-            width: 26,
-            height: 14,
-          ),
-          0.1,
-          math.pi - 0.2,
-          false,
-          Paint()
-            ..color = Colors.white
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.8
-            ..strokeCap = StrokeCap.round,
-        );
+        if (frontCos > -0.15) {
+          final double midX = sway * 0.65 + frontSin * 16.0;
+          final double squash = frontCos.clamp(0.30, 1.0);
+          final Paint framePaint = Paint()..color = const Color(0xFF111111);
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                center: Offset(midX - 16 * squash, -86),
+                width: 24 * squash,
+                height: 15,
+              ),
+              const Radius.circular(4),
+            ),
+            framePaint,
+          );
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                center: Offset(midX + 16 * squash, -86),
+                width: 24 * squash,
+                height: 15,
+              ),
+              const Radius.circular(4),
+            ),
+            framePaint,
+          );
+          canvas.drawLine(
+            Offset(midX - 4 * squash, -88),
+            Offset(midX + 4 * squash, -88),
+            Paint()
+              ..color = const Color(0xFFFFD54F)
+              ..strokeWidth = 2.5,
+          );
+          canvas.drawArc(
+            Rect.fromCenter(
+              center: Offset(midX, -70),
+              width: 26 * squash,
+              height: 14,
+            ),
+            0.1,
+            math.pi - 0.2,
+            false,
+            Paint()
+              ..color = Colors.white
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2.8
+              ..strokeCap = StrokeCap.round,
+          );
+        }
         break;
 
       case CoconutStyleMode.cocktail:
-        // Festive Christmas / Yule Tree with 24 glowing fairy lights & star topper at -146
+        // Festive Yule Tree with 360° 3D spiraling fairy lights & rotating star topper at -146
         final double starX = sway * 1.08;
         final Offset starCenter = Offset(starX, -144);
         canvas.drawCircle(
@@ -3279,12 +3403,14 @@ class PineForestWorldPainter extends CustomPainter {
             ..color = const Color(0xFFFFEA00).withValues(alpha: 0.48)
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
         );
+        final double starSpin = (-cameraYaw) * math.pi / 180.0;
         final Path starPath = Path();
         for (int p = 0; p < 10; p++) {
           final double r = p.isEven ? 13.0 : 5.5;
           final double a = -math.pi / 2 + p * (math.pi / 5);
           final Offset pt = Offset(
-            starCenter.dx + math.cos(a) * r,
+            starCenter.dx +
+                math.cos(a) * r * (0.55 + 0.45 * math.cos(starSpin).abs()),
             starCenter.dy + math.sin(a) * r,
           );
           if (p == 0) {
@@ -3303,32 +3429,36 @@ class PineForestWorldPainter extends CustomPainter {
           const Color(0xFFE040FB),
           const Color(0xFF00E676),
         ];
-        for (int b = 0; b < 24; b++) {
-          final double tierFrac = b / 24.0;
-          final double by = -28.0 - tierFrac * 102.0;
-          final double maxW = (1.0 - tierFrac * 0.78) * 58.0;
-          final double bx =
-              sway * (0.25 + tierFrac * 0.7) + math.sin(b * 2.3) * maxW;
-          final Color col = bulbCols[b % bulbCols.length];
-          final double pulseGlow =
-              0.6 + 0.4 * math.sin(time * 4.5 + b * 0.9);
-          canvas.drawCircle(
-            Offset(bx, by),
-            6.5 * pulseGlow,
-            Paint()
-              ..color = col.withValues(alpha: 0.45)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-          );
-          canvas.drawCircle(
-            Offset(bx, by),
-            3.8,
-            Paint()..color = col,
-          );
+        for (int b = 0; b < 32; b++) {
+          final double tierFrac = b / 32.0;
+          final double by = -26.0 - tierFrac * 106.0;
+          final double maxW = (1.0 - tierFrac * 0.78) * 62.0;
+          final double bRad =
+              (b * 48.0 - cameraYaw) * math.pi / 180.0;
+          if (math.cos(bRad) > -0.15) {
+            final double bx =
+                sway * (0.25 + tierFrac * 0.7) + math.sin(bRad) * maxW;
+            final Color col = bulbCols[b % bulbCols.length];
+            final double pulseGlow =
+                0.6 + 0.4 * math.sin(time * 4.5 + b * 0.9);
+            canvas.drawCircle(
+              Offset(bx, by + math.cos(bRad) * 3.0),
+              6.5 * pulseGlow,
+              Paint()
+                ..color = col.withValues(alpha: 0.45)
+                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+            );
+            canvas.drawCircle(
+              Offset(bx, by + math.cos(bRad) * 3.0),
+              3.8,
+              Paint()..color = col,
+            );
+          }
         }
         break;
 
       case CoconutStyleMode.king:
-        // Ancient Wise Ent with glowing golden crown, amber eyes & perched snowy owl
+        // Ancient Wise Ent with 3D rotating golden crown, amber eyes & orbiting snowy owl
         final double crownX = sway * 1.08;
         final Path crown = Path()
           ..moveTo(crownX - 18, -136)
@@ -3341,50 +3471,64 @@ class PineForestWorldPainter extends CustomPainter {
           ..close();
         canvas.drawPath(crown, Paint()..color = const Color(0xFFFFD54F));
         canvas.drawCircle(
-          Offset(crownX, -143),
+          Offset(crownX + frontSin * 10.0, -143),
           3.0,
           Paint()..color = const Color(0xFF00E5FF),
         );
 
-        final Paint runeGlow = Paint()
-          ..color = const Color(0xFFFFAB00)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-        canvas.drawOval(
-          Rect.fromCenter(center: const Offset(-9, -56), width: 10, height: 5),
-          runeGlow,
-        );
-        canvas.drawOval(
-          Rect.fromCenter(center: const Offset(9, -56), width: 10, height: 5),
-          runeGlow,
-        );
-        canvas.drawOval(
-          Rect.fromCenter(center: const Offset(-9, -56), width: 7, height: 3.2),
-          Paint()..color = const Color(0xFFFFF59D),
-        );
-        canvas.drawOval(
-          Rect.fromCenter(center: const Offset(9, -56), width: 7, height: 3.2),
-          Paint()..color = const Color(0xFFFFF59D),
-        );
+        if (frontCos > 0.0) {
+          final double eyeBaseX = frontSin * 14.0;
+          final double eyeSquash = frontCos.clamp(0.25, 1.0);
+          final Paint runeGlow = Paint()
+            ..color = const Color(0xFFFFAB00)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+          for (final double side in [-1.0, 1.0]) {
+            final Offset eyeCenter =
+                Offset(eyeBaseX + side * 9.0 * eyeSquash, -56);
+            canvas.drawOval(
+              Rect.fromCenter(
+                center: eyeCenter,
+                width: 10 * eyeSquash,
+                height: 5,
+              ),
+              runeGlow,
+            );
+            canvas.drawOval(
+              Rect.fromCenter(
+                center: eyeCenter,
+                width: 7 * eyeSquash,
+                height: 3.2,
+              ),
+              Paint()..color = const Color(0xFFFFF59D),
+            );
+          }
+        }
 
-        final Offset owlPos = Offset(sway * 0.5 + 38, -72);
-        canvas.drawOval(
-          Rect.fromCenter(center: owlPos, width: 13, height: 18),
-          Paint()..color = Colors.white,
-        );
-        canvas.drawCircle(
-          owlPos.translate(-2.4, -3.5),
-          1.7,
-          Paint()..color = const Color(0xFFFFB300),
-        );
-        canvas.drawCircle(
-          owlPos.translate(2.4, -3.5),
-          1.7,
-          Paint()..color = const Color(0xFFFFB300),
-        );
+        final double owlRad = (55.0 - cameraYaw) * math.pi / 180.0;
+        if (math.cos(owlRad) > -0.2) {
+          final Offset owlPos = Offset(
+            sway * 0.5 + math.sin(owlRad) * 40.0,
+            -72 + math.cos(owlRad) * 4.0,
+          );
+          canvas.drawOval(
+            Rect.fromCenter(center: owlPos, width: 13, height: 18),
+            Paint()..color = Colors.white,
+          );
+          canvas.drawCircle(
+            owlPos.translate(-2.4, -3.5),
+            1.7,
+            Paint()..color = const Color(0xFFFFB300),
+          );
+          canvas.drawCircle(
+            owlPos.translate(2.4, -3.5),
+            1.7,
+            Paint()..color = const Color(0xFFFFB300),
+          );
+        }
         break;
 
       case CoconutStyleMode.lofi:
-        // Cozy striped knitted wool scarf around trunk + studio headphones & floating notes
+        // Cozy striped knitted wool scarf around trunk + 3D rotating studio headphones & notes
         final double midX = sway * 0.55;
         final Paint bandPaint = Paint()
           ..color = const Color(0xFF37474F)
@@ -3401,11 +3545,13 @@ class PineForestWorldPainter extends CustomPainter {
           false,
           bandPaint,
         );
-        for (final side in [-1.0, 1.0]) {
+        for (final double cupAz in [-75.0, 105.0]) {
+          final double cRad = (cupAz - cameraYaw) * math.pi / 180.0;
+          final double cxOff = math.sin(cRad) * 46.0;
           canvas.drawRRect(
             RRect.fromRectAndRadius(
               Rect.fromCenter(
-                center: Offset(midX + side * 46, -82),
+                center: Offset(midX + cxOff, -82 + math.cos(cRad) * 3.0),
                 width: 14,
                 height: 24,
               ),
@@ -3415,6 +3561,7 @@ class PineForestWorldPainter extends CustomPainter {
           );
         }
 
+        // Scarf collar & 3D rotating scarf tail
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             const Rect.fromLTWH(-17, -20, 34, 11),
@@ -3422,21 +3569,24 @@ class PineForestWorldPainter extends CustomPainter {
           ),
           Paint()..color = const Color(0xFFD32F2F),
         );
+        final double scarfStripeShift = frontSin * 8.0;
         canvas.drawRect(
-          const Rect.fromLTWH(-9, -20, 6, 11),
+          Rect.fromLTWH(-9 + scarfStripeShift * 0.5, -20, 6, 11),
           Paint()..color = const Color(0xFFFFF8E1),
         );
         canvas.drawRect(
-          const Rect.fromLTWH(4, -20, 6, 11),
+          Rect.fromLTWH(4 + scarfStripeShift * 0.5, -20, 6, 11),
           Paint()..color = const Color(0xFFFFF8E1),
         );
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(5, -12, 9, 18),
-            const Radius.circular(3),
-          ),
-          Paint()..color = const Color(0xFFD32F2F),
-        );
+        if (frontCos > -0.2) {
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromLTWH(frontSin * 11.0, -12, 9, 18),
+              const Radius.circular(3),
+            ),
+            Paint()..color = const Color(0xFFD32F2F),
+          );
+        }
 
         for (int n = 0; n < 3; n++) {
           final double np = (time * 0.55 + n * 0.33) % 1.0;

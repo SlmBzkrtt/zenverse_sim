@@ -13,13 +13,6 @@ enum CameraRotationMode {
   guidedPoiTour, // 📍 Rehberli Durak Turu
 }
 
-enum ZenVerseShaderMode {
-  cinematicGodRays, // ✨ Işık Hüzmesi & 3B Derinlik
-  auroraDream, // 🌌 Aurora & Ateşböceği
-  cozyRefraction, // 💧 Sinematik Mercek & Yağmur
-  off, // 🚫 Shader Kapalı
-}
-
 /// High-performance 60-120 FPS game loop & camera controller for ZenVerse.
 ///
 /// Passed directly as `repaint: controller` to [CustomPainter] inside a
@@ -33,15 +26,13 @@ class ZenVerseController extends ChangeNotifier {
     CoconutAtmosphereMode initialAtmosphere = CoconutAtmosphereMode.sunset,
     CoconutStyleMode initialStyle = CoconutStyleMode.natural,
     CameraRotationMode initialRotationMode = CameraRotationMode.manual,
-    ZenVerseShaderMode initialShaderMode = ZenVerseShaderMode.cinematicGodRays,
     this.isMenuPreview = false,
   })  : _cameraYaw = initialYaw,
         _cameraPitch = initialPitch,
         _pendulumCenterYaw = initialYaw,
         _atmosphereMode = initialAtmosphere,
         _styleMode = initialStyle,
-        _rotationMode = initialRotationMode,
-        _shaderMode = initialShaderMode {
+        _rotationMode = initialRotationMode {
     roundedYawNotifier = ValueNotifier<int>(initialYaw.round() % 360);
     elapsedSecondsNotifier = ValueNotifier<int>(0);
   }
@@ -61,7 +52,6 @@ class ZenVerseController extends ChangeNotifier {
   CoconutStyleMode _styleMode;
   CoconutAtmosphereMode _atmosphereMode;
   CameraRotationMode _rotationMode;
-  ZenVerseShaderMode _shaderMode;
   bool _autoOrbitPreview = true;
 
   int _poiTourIndex = 0;
@@ -81,7 +71,6 @@ class ZenVerseController extends ChangeNotifier {
   bool get isArcadeMode => _styleMode == CoconutStyleMode.arcade;
   CoconutAtmosphereMode get atmosphereMode => _atmosphereMode;
   CameraRotationMode get rotationMode => _rotationMode;
-  ZenVerseShaderMode get shaderMode => _shaderMode;
   bool get autoOrbitPreview => _autoOrbitPreview;
 
   void updateScenicPoints(List<ScenicPoint> points) {
@@ -297,13 +286,6 @@ class ZenVerseController extends ChangeNotifier {
     } else {
       _cameraZoom = 1.0;
     }
-    notifyListeners();
-  }
-
-  void cycleShaderMode() {
-    final int next =
-        (_shaderMode.index + 1) % ZenVerseShaderMode.values.length;
-    _shaderMode = ZenVerseShaderMode.values[next];
     notifyListeners();
   }
 
