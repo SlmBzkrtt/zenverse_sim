@@ -8,22 +8,25 @@ import 'storage_service.dart';
 
 /// Multi-layered audio engine for ZenVerse: Chill Object Sim.
 ///
-/// Combines:
-/// 1. **Full-Length Studio Theme Music Playlist (`_musicPlayer` at ~72% volume)**:
+/// Uses two independent audio channel volume levels:
+/// 1. **Background Music Channel (`musicVolume = 0.90` / 90%)**:
 ///    Each of the 6 worlds has 2 full-length instrumental tracks stored in
 ///    `assets/music/<worldId>_1.m4a` and `assets/music/<worldId>_2.m4a`
-///    (Tropical Bossa/Chill, Nordic Winter Waltz/Aurora, Japanese Shakuhachi/Koto,
+///    (Tropical Bossa/Summer Chill, Nordic Winter Waltz/Aurora, Japanese Shakuhachi/Koto,
 ///    European Night Saxophone/Jazz, Desert Oud/Mirage, Christmas Silent Night/Celesta).
 ///    Tracks play back-to-back in an endless 2-song playlist per world.
-/// 2. **Subtle 360° Directional Environmental Layer (`_directionalPlayer` at 8%–14% volume)**:
-///    Adds gentle, non-intrusive spatial color (soft waves, crackling fire, water
-///    drips, distant bells, breeze) at 10%–15% volume with stereo panning as the
-///    user rotates 360° around the world.
-/// 3. **Soft Interaction SFX (`_sfxPlayer`)**:
-///    Plays a gentle harmonic chime on object tap.
+/// 2. **Effect Audio Channel (`effectVolume = 0.10` / 10%)**:
+///    Independent 10% level for both the 360° directional environmental layer
+///    (soft ocean surf, crackling fire, water breeze) and object tap chimes.
 class AudioService {
   AudioService._();
   static final AudioService instance = AudioService._();
+
+  /// Independent channel volume for background music (90%).
+  static const double musicVolume = 0.90;
+
+  /// Independent channel volume for 360° directional & interaction effects (10%).
+  static const double effectVolume = 0.10;
 
   AudioPlayer? _musicPlayer;
   AudioPlayer? _directionalPlayer;
@@ -55,7 +58,7 @@ class AudioService {
   static const Map<String, List<String>> _worldMusicPlaylists = {
     'coconut': [
       'music/coconut_1.m4a', // Bossa Antigua (Tropical Beach Bossa Nova)
-      'music/coconut_2.m4a', // Port Horizon (Calm Ocean Sunset Chill)
+      'music/coconut_2.m4a', // Summer Day (Soothing Tropical Evening Guitar & EP)
     ],
     'pine_tree': [
       'music/pine_tree_1.m4a', // Frost Waltz (Snowy Nordic Waltz)
@@ -86,7 +89,7 @@ class AudioService {
       return _tempAudioDir!;
     }
     final Directory dir = Directory(
-      '${Directory.systemTemp.path}/zenverse_audio_v5',
+      '${Directory.systemTemp.path}/zenverse_audio_v6',
     );
     if (!dir.existsSync()) {
       dir.createSync(recursive: true);
@@ -187,12 +190,11 @@ class AudioService {
     final List<String> playlist =
         _worldMusicPlaylists[worldId] ?? _worldMusicPlaylists['coconut']!;
     final String targetAsset = playlist[trackIdx % playlist.length];
-    final double musicVol = _getMusicVolumeForAtmosphere();
 
     if (_activeMusicAsset == targetAsset || _isUpdatingMusic) {
       // Keep playing seamlessly without restarting if already playing this track
       try {
-        await _musicPlayer?.setVolume(musicVol);
+        await _musicPlayer?.setVolume(musicVolume);
       } catch (_) {}
       return;
     }
@@ -208,9 +210,9 @@ class AudioService {
         _musicPlayer = player;
       }
       _activeMusicAsset = targetAsset;
-      await _musicPlayer!.setVolume(musicVol);
+      await _musicPlayer!.setVolume(musicVolume);
       await _musicPlayer!.play(AssetSource(targetAsset));
-      await _musicPlayer!.setVolume(musicVol);
+      await _musicPlayer!.setVolume(musicVolume);
     } catch (_) {
       // Gracefully ignore in headless widget tests
     } finally {
@@ -226,17 +228,7 @@ class AudioService {
     _ensureMusicTrackPlaying(_currentWorldId!, _currentTrackIndex);
   }
 
-  /// Background music sits at ~95% volume as the primary audio experience.
-  double _getMusicVolumeForAtmosphere() {
-    return switch (_currentAtmosphere) {
-      CoconutAtmosphereMode.sunset => 0.95,
-      CoconutAtmosphereMode.noon => 0.95,
-      CoconutAtmosphereMode.night => 0.92,
-      CoconutAtmosphereMode.rain => 0.94,
-    };
-  }
-
-  /// Updates the whisper-soft 360° directional ambient layer (3%–5% volume)
+  /// Updates the 360° directional ambient effect layer (10% independent volume)
   /// as the camera rotates around the world.
   void updateCameraOrientation({
     required double yaw,
@@ -276,7 +268,7 @@ class AudioService {
     if (isMuted || _isPausedByLifecycle || _isUpdatingDirectional) return;
 
     final _DirectionalSpot spot = _resolveClosestSpot(worldId, yaw);
-    final String dirKey = 'whisper_dir_${worldId}_z${spot.zoneIndex}';
+    final String dirKey = 'effect_dir_${worldId}_z${spot.zoneIndex}';
 
     _isUpdatingDirectional = true;
     try {
@@ -286,9 +278,8 @@ class AudioService {
         _directionalPlayer = player;
       }
 
-      // Strictly keep 360° directional effects at 3%–5% (0.03–0.05) volume
-      final double targetVol =
-          (spot.volume * (isMenuPreview ? 0.80 : 1.0)).clamp(0.025, 0.05);
+      // Independent effect volume channel (10% / 0.10)
+      final double targetVol = spot.volume;
 
       if (forceSwitch ||
           _activeDirectionalKey != dirKey ||
@@ -318,7 +309,7 @@ class AudioService {
   Future<void> playInteractionChime() async {
     if (isMuted || _isPausedByLifecycle) return;
     final String worldId = _currentWorldId ?? 'coconut';
-    final String sfxKey = 'sfx_whisper_$worldId';
+    final String sfxKey = 'sfx_effect_$worldId';
     try {
       if (_sfxPlayer == null) {
         final player = AudioPlayer();
@@ -329,9 +320,9 @@ class AudioService {
         sfxKey,
         () => _buildWorldChimeWav(worldId),
       );
-      await _sfxPlayer!.setVolume(0.08);
+      await _sfxPlayer!.setVolume(effectVolume);
       await _sfxPlayer!.play(source);
-      await _sfxPlayer!.setVolume(0.08);
+      await _sfxPlayer!.setVolume(effectVolume);
     } catch (_) {}
   }
 
@@ -374,7 +365,7 @@ class AudioService {
   }
 
   // ---------------------------------------------------------------------------
-  // 360° DIRECTIONAL ZONE RESOLUTION (STRICTLY 3%–5% WHISPER LAYER)
+  // 360° DIRECTIONAL ZONE RESOLUTION (INDEPENDENT 10% EFFECT CHANNEL)
   // ---------------------------------------------------------------------------
   static const List<double> _zoneCenterAngles = [0.0, 74.0, 128.0, 168.0, 235.0];
 
@@ -394,14 +385,12 @@ class AudioService {
       }
     }
 
-    // Strictly 0.03 (3%) to 0.05 (5%) volume
-    final double proximity = (1.0 - (bestAbsDiff / 65.0)).clamp(0.0, 1.0);
-    final double volume = 0.03 + 0.02 * proximity;
+    // Independent 10% effect channel (effectVolume = 0.10)
     final double pan = (signedDiffForBest / 55.0).clamp(-0.50, 0.50);
 
     return _DirectionalSpot(
       zoneIndex: bestZone,
-      volume: volume,
+      volume: effectVolume,
       pan: pan,
     );
   }
