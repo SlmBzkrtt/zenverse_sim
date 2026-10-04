@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -5,40 +6,42 @@ import 'package:audioplayers/audioplayers.dart';
 import '../painters/coconut_world_painter.dart';
 import 'storage_service.dart';
 
-/// Multi-layered 360° spatial & theme-reactive procedural audio engine.
+/// Multi-layered audio engine for ZenVerse: Chill Object Sim.
 ///
-/// Uses two concurrent looping [AudioPlayer] channels plus an SFX channel:
-/// 1. **Base World + Atmosphere Player (`_ambientPlayer`)**:
-///    Plays a rich, seamless 6-second soundscape tailored to both the active
-///    world (`worldId`) and weather/time atmosphere (`CoconutAtmosphereMode`).
-/// 2. **360° Directional Landmark Player (`_directionalPlayer`)**:
-///    Dynamically switches among 5 directional landmark soundscapes per world
-///    as the camera rotates (`cameraYaw` 0°–360°), adjusting stereo balance
-///    and proximity volume in real time.
-/// 3. **Interaction SFX Player (`_sfxPlayer`)**:
-///    Plays world-tuned harmonic chimes and soft UI ticks.
-///
-/// Note on macOS/iOS (`audioplayers_darwin`): `BytesSource` is unimplemented
-/// in `audioplayers_darwin`, so synthesized WAV buffers are cached to
-/// [Directory.systemTemp] and played via [DeviceFileSource].
+/// Combines:
+/// 1. **Full-Length Studio Theme Music Playlist (`_musicPlayer` at ~72% volume)**:
+///    Each of the 6 worlds has 2 full-length instrumental tracks stored in
+///    `assets/music/<worldId>_1.m4a` and `assets/music/<worldId>_2.m4a`
+///    (Tropical Bossa/Chill, Nordic Winter Waltz/Aurora, Japanese Shakuhachi/Koto,
+///    European Night Saxophone/Jazz, Desert Oud/Mirage, Christmas Silent Night/Celesta).
+///    Tracks play back-to-back in an endless 2-song playlist per world.
+/// 2. **Subtle 360° Directional Environmental Layer (`_directionalPlayer` at 8%–14% volume)**:
+///    Adds gentle, non-intrusive spatial color (soft waves, crackling fire, water
+///    drips, distant bells, breeze) at 10%–15% volume with stereo panning as the
+///    user rotates 360° around the world.
+/// 3. **Soft Interaction SFX (`_sfxPlayer`)**:
+///    Plays a gentle harmonic chime on object tap.
 class AudioService {
   AudioService._();
   static final AudioService instance = AudioService._();
 
-  AudioPlayer? _ambientPlayer;
+  AudioPlayer? _musicPlayer;
   AudioPlayer? _directionalPlayer;
   AudioPlayer? _sfxPlayer;
+  StreamSubscription<void>? _musicCompleteSub;
 
   String? _currentWorldId;
+  int _currentTrackIndex = 0; // 0 or 1 (2 full songs per world)
+  String? _activeMusicAsset;
+
   CoconutAtmosphereMode _currentAtmosphere = CoconutAtmosphereMode.sunset;
   CoconutStyleMode _currentStyle = CoconutStyleMode.natural;
 
-  String? _activeAmbientKey;
   String? _activeDirectionalKey;
   int _currentDirectionalZone = -1;
 
   bool _isPausedByLifecycle = false;
-  bool _isUpdatingAmbient = false;
+  bool _isUpdatingMusic = false;
   bool _isUpdatingDirectional = false;
 
   double _lastSpatialYaw = -999.0;
@@ -48,15 +51,42 @@ class AudioService {
   final Map<String, String> _wavFilePathCache = <String, String>{};
   final Map<String, Uint8List> _wavMemoryCache = <String, Uint8List>{};
 
+  /// 2 full-length music tracks per world inside `assets/music/`.
+  static const Map<String, List<String>> _worldMusicPlaylists = {
+    'coconut': [
+      'music/coconut_1.m4a', // Bossa Antigua (Tropical Beach Bossa Nova)
+      'music/coconut_2.m4a', // Port Horizon (Calm Ocean Sunset Chill)
+    ],
+    'pine_tree': [
+      'music/pine_tree_1.m4a', // Frost Waltz (Snowy Nordic Waltz)
+      'music/pine_tree_2.m4a', // Floating Cities (Aurora Borealis Ambient)
+    ],
+    'mossy_rock': [
+      'music/mossy_rock_1.m4a', // Ishikari Lore (Japanese Shakuhachi & Koto)
+      'music/mossy_rock_2.m4a', // Eastern Thought (Kyoto Zen Temple Meditation)
+    ],
+    'street_lamp': [
+      'music/street_lamp_1.m4a', // Night on the Docks - Sax (Night Jazz Saxophone)
+      'music/street_lamp_2.m4a', // Lobby Time (European Café Lounge Jazz)
+    ],
+    'desert_cactus': [
+      'music/desert_cactus_1.m4a', // Desert City (Middle Eastern Oud & Caravan)
+      'music/desert_cactus_2.m4a', // East of Tunesia (Oasis & Canyon Mirage)
+    ],
+    'christmas_tree': [
+      'music/christmas_tree_1.m4a', // Silent Night / Stille Nacht (Instrumental)
+      'music/christmas_tree_2.m4a', // Dance of the Sugar Plum Fairy (Christmas Market)
+    ],
+  };
+
   bool get isMuted => StorageService.instance.isAudioMuted.value;
 
-  /// Resolves or creates the temporary directory for synthesized WAV files.
   Directory _getTempAudioDir() {
     if (_tempAudioDir != null && _tempAudioDir!.existsSync()) {
       return _tempAudioDir!;
     }
     final Directory dir = Directory(
-      '${Directory.systemTemp.path}/zenverse_audio_v2',
+      '${Directory.systemTemp.path}/zenverse_audio_v3',
     );
     if (!dir.existsSync()) {
       dir.createSync(recursive: true);
@@ -65,9 +95,7 @@ class AudioService {
     return dir;
   }
 
-  /// Materializes a WAV buffer as a local file and returns a [Source]
-  /// compatible with macOS, iOS, and Android.
-  Source _getPlayableSource(String cacheKey, Uint8List Function() builder) {
+  Source _getPlayableWavSource(String cacheKey, Uint8List Function() builder) {
     try {
       final String? existingPath = _wavFilePathCache[cacheKey];
       if (existingPath != null && File(existingPath).existsSync()) {
@@ -92,11 +120,11 @@ class AudioService {
     await StorageService.instance.setAudioMuted(nextMuted);
     try {
       if (nextMuted) {
-        await _ambientPlayer?.setVolume(0.0);
+        await _musicPlayer?.setVolume(0.0);
         await _directionalPlayer?.setVolume(0.0);
       } else {
         if (_currentWorldId != null) {
-          _activeAmbientKey = null;
+          _activeMusicAsset = null;
           _activeDirectionalKey = null;
           await startAmbientForWorld(
             _currentWorldId!,
@@ -108,71 +136,105 @@ class AudioService {
     } catch (_) {}
   }
 
-  /// Starts or updates the world's base soundscape and 360° directional audio.
+  /// Starts or updates the world's full-length background music playlist
+  /// and primes the subtle (10%–14%) 360° directional ambient layer.
   Future<void> startAmbientForWorld(
     String worldId, {
     CoconutAtmosphereMode? atmosphere,
     CoconutStyleMode? style,
     double? initialYaw,
   }) async {
+    final bool worldChanged = _currentWorldId != worldId;
+    final CoconutAtmosphereMode nextAtmosphere = atmosphere ??
+        StorageService.instance.loadAtmosphereMode(worldId: worldId);
+    final bool atmosphereChanged = _currentAtmosphere != nextAtmosphere;
+
     _currentWorldId = worldId;
-    if (atmosphere != null) {
-      _currentAtmosphere = atmosphere;
-    } else {
-      _currentAtmosphere =
-          StorageService.instance.loadAtmosphereMode(worldId: worldId);
-    }
-    if (style != null) {
-      _currentStyle = style;
-    } else {
-      _currentStyle = StorageService.instance.loadStyleMode(worldId: worldId);
+    _currentAtmosphere = nextAtmosphere;
+    _currentStyle =
+        style ?? StorageService.instance.loadStyleMode(worldId: worldId);
+
+    if (worldChanged) {
+      // Pick initial track based on atmosphere (Sunset/Noon -> Track 1, Night/Rain -> Track 2)
+      _currentTrackIndex = (_currentAtmosphere == CoconutAtmosphereMode.night ||
+              _currentAtmosphere == CoconutAtmosphereMode.rain)
+          ? 1
+          : 0;
+    } else if (atmosphereChanged) {
+      // Switching between Day/Sunset and Night/Rain alternates between the world's 2 songs
+      final int preferredTrack =
+          (_currentAtmosphere == CoconutAtmosphereMode.night ||
+                  _currentAtmosphere == CoconutAtmosphereMode.rain)
+              ? 1
+              : 0;
+      _currentTrackIndex = preferredTrack;
     }
 
     if (isMuted || _isPausedByLifecycle) return;
 
-    final String styleTag =
-        _currentStyle == CoconutStyleMode.lofi ? 'lofi' : 'std';
-    final String ambientKey =
-        'amb_${worldId}_${_currentAtmosphere.name}_$styleTag';
+    await _ensureMusicTrackPlaying(worldId, _currentTrackIndex);
 
-    if (_activeAmbientKey != ambientKey && !_isUpdatingAmbient) {
-      _isUpdatingAmbient = true;
-      try {
-        if (_ambientPlayer == null) {
-          final player = AudioPlayer();
-          await player.setReleaseMode(ReleaseMode.loop);
-          _ambientPlayer = player;
-        }
-        final Source source = _getPlayableSource(
-          ambientKey,
-          () => _buildWorldAmbientWav(
-            worldId,
-            _currentAtmosphere,
-            _currentStyle,
-          ),
-        );
-        await _ambientPlayer!.setVolume(0.48);
-        await _ambientPlayer!.play(source);
-        _activeAmbientKey = ambientKey;
-      } catch (_) {
-        // Ignore in headless test environments without platform channels
-      } finally {
-        _isUpdatingAmbient = false;
-      }
-    }
-
-    // Also prime or update the 360° directional layer
     final double yawToUse =
         initialYaw ?? (_lastSpatialYaw >= 0 ? _lastSpatialYaw : 15.0);
     await _updateDirectionalZoneAudio(
       worldId: worldId,
       yaw: yawToUse,
-      forceSwitch: true,
+      forceSwitch: worldChanged,
     );
   }
 
-  /// Called from the camera loop / pan handler as the user rotates 360°.
-  /// Throttled so platform channels are updated smoothly without frame drops.
+  Future<void> _ensureMusicTrackPlaying(String worldId, int trackIdx) async {
+    final List<String> playlist =
+        _worldMusicPlaylists[worldId] ?? _worldMusicPlaylists['coconut']!;
+    final String targetAsset = playlist[trackIdx % playlist.length];
+
+    if (_activeMusicAsset == targetAsset || _isUpdatingMusic) {
+      // Keep playing seamlessly without restarting if already playing this track
+      try {
+        await _musicPlayer?.setVolume(_getMusicVolumeForAtmosphere());
+      } catch (_) {}
+      return;
+    }
+
+    _isUpdatingMusic = true;
+    try {
+      if (_musicPlayer == null) {
+        final player = AudioPlayer();
+        await player.setReleaseMode(ReleaseMode.stop);
+        _musicCompleteSub = player.onPlayerComplete.listen((_) {
+          _onMusicTrackComplete();
+        });
+        _musicPlayer = player;
+      }
+      _activeMusicAsset = targetAsset;
+      await _musicPlayer!.setVolume(_getMusicVolumeForAtmosphere());
+      await _musicPlayer!.play(AssetSource(targetAsset));
+    } catch (_) {
+      // Gracefully ignore in headless widget tests
+    } finally {
+      _isUpdatingMusic = false;
+    }
+  }
+
+  void _onMusicTrackComplete() {
+    if (isMuted || _isPausedByLifecycle || _currentWorldId == null) return;
+    // Advance to the next full-length song in this world's 2-track playlist
+    _currentTrackIndex = (_currentTrackIndex + 1) % 2;
+    _activeMusicAsset = null;
+    _ensureMusicTrackPlaying(_currentWorldId!, _currentTrackIndex);
+  }
+
+  double _getMusicVolumeForAtmosphere() {
+    return switch (_currentAtmosphere) {
+      CoconutAtmosphereMode.sunset => 0.72,
+      CoconutAtmosphereMode.noon => 0.74,
+      CoconutAtmosphereMode.night => 0.66,
+      CoconutAtmosphereMode.rain => 0.68,
+    };
+  }
+
+  /// Updates the subtle 360° directional ambient color layer (10%–14% volume)
+  /// as the camera rotates around the world.
   void updateCameraOrientation({
     required double yaw,
     String? worldId,
@@ -184,11 +246,11 @@ class AudioService {
 
     final DateTime now = DateTime.now();
     final double angleDiff = (normalizedYaw - _lastSpatialYaw).abs();
-    if (angleDiff < 3.5 &&
-        now.difference(_lastSpatialUpdate).inMilliseconds < 180) {
+    if (angleDiff < 4.0 &&
+        now.difference(_lastSpatialUpdate).inMilliseconds < 200) {
       return;
     }
-    if (now.difference(_lastSpatialUpdate).inMilliseconds < 95) {
+    if (now.difference(_lastSpatialUpdate).inMilliseconds < 110) {
       return;
     }
 
@@ -211,7 +273,7 @@ class AudioService {
     if (isMuted || _isPausedByLifecycle || _isUpdatingDirectional) return;
 
     final _DirectionalSpot spot = _resolveClosestSpot(worldId, yaw);
-    final String dirKey = 'dir_${worldId}_z${spot.zoneIndex}';
+    final String dirKey = 'sub_dir_${worldId}_z${spot.zoneIndex}';
 
     _isUpdatingDirectional = true;
     try {
@@ -221,20 +283,24 @@ class AudioService {
         _directionalPlayer = player;
       }
 
+      // Strictly keep 360° directional effects in the subtle 10%–15% range
+      final double targetVol =
+          (spot.volume * (isMenuPreview ? 0.85 : 1.0)).clamp(0.08, 0.15);
+
       if (forceSwitch ||
           _activeDirectionalKey != dirKey ||
           _currentDirectionalZone != spot.zoneIndex) {
-        final Source source = _getPlayableSource(
+        final Source source = _getPlayableWavSource(
           dirKey,
-          () => _buildDirectionalZoneWav(worldId, spot.zoneIndex),
+          () => _buildSubtleDirectionalWav(worldId, spot.zoneIndex),
         );
         _currentDirectionalZone = spot.zoneIndex;
         _activeDirectionalKey = dirKey;
-        await _directionalPlayer!.setVolume(spot.volume * (isMenuPreview ? 0.78 : 1.0));
+        await _directionalPlayer!.setVolume(targetVol);
         await _directionalPlayer!.setBalance(spot.pan);
         await _directionalPlayer!.play(source);
       } else {
-        await _directionalPlayer!.setVolume(spot.volume * (isMenuPreview ? 0.78 : 1.0));
+        await _directionalPlayer!.setVolume(targetVol);
         await _directionalPlayer!.setBalance(spot.pan);
       }
     } catch (_) {
@@ -244,22 +310,21 @@ class AudioService {
     }
   }
 
-  /// Plays a world-themed harmonic chime when tapping the center object or launching.
   Future<void> playInteractionChime() async {
     if (isMuted || _isPausedByLifecycle) return;
     final String worldId = _currentWorldId ?? 'coconut';
-    final String sfxKey = 'sfx_chime_$worldId';
+    final String sfxKey = 'sfx_soft_$worldId';
     try {
       if (_sfxPlayer == null) {
         final player = AudioPlayer();
         await player.setReleaseMode(ReleaseMode.stop);
         _sfxPlayer = player;
       }
-      final Source source = _getPlayableSource(
+      final Source source = _getPlayableWavSource(
         sfxKey,
         () => _buildWorldChimeWav(worldId),
       );
-      await _sfxPlayer!.setVolume(0.42);
+      await _sfxPlayer!.setVolume(0.24);
       await _sfxPlayer!.play(source);
     } catch (_) {}
   }
@@ -267,7 +332,7 @@ class AudioService {
   Future<void> pauseForLifecycle() async {
     _isPausedByLifecycle = true;
     try {
-      await _ambientPlayer?.pause();
+      await _musicPlayer?.pause();
       await _directionalPlayer?.pause();
     } catch (_) {}
   }
@@ -277,31 +342,33 @@ class AudioService {
     _isPausedByLifecycle = false;
     if (isMuted) return;
     try {
-      await _ambientPlayer?.resume();
+      await _musicPlayer?.resume();
       await _directionalPlayer?.resume();
     } catch (_) {}
   }
 
   Future<void> stopAmbient() async {
     try {
-      await _ambientPlayer?.stop();
+      await _musicPlayer?.stop();
       await _directionalPlayer?.stop();
     } catch (_) {}
   }
 
   Future<void> dispose() async {
+    await _musicCompleteSub?.cancel();
+    _musicCompleteSub = null;
     try {
-      await _ambientPlayer?.dispose();
+      await _musicPlayer?.dispose();
       await _directionalPlayer?.dispose();
       await _sfxPlayer?.dispose();
     } catch (_) {}
-    _ambientPlayer = null;
+    _musicPlayer = null;
     _directionalPlayer = null;
     _sfxPlayer = null;
   }
 
   // ---------------------------------------------------------------------------
-  // 360° DIRECTIONAL ZONE RESOLUTION
+  // 360° DIRECTIONAL ZONE RESOLUTION (SUBTLE 10%–15% SPATIAL LAYER)
   // ---------------------------------------------------------------------------
   static const List<double> _zoneCenterAngles = [0.0, 74.0, 128.0, 168.0, 235.0];
 
@@ -321,11 +388,10 @@ class AudioService {
       }
     }
 
-    // Proximity gain: louder when looking directly at the landmark, softer between zones
-    final double proximity = (1.0 - (bestAbsDiff / 65.0)).clamp(0.35, 1.0);
-    final double volume = (0.22 + 0.34 * proximity).clamp(0.18, 0.56);
-    // Stereo pan: -0.60 (left) to +0.60 (right) relative to camera look direction
-    final double pan = (signedDiffForBest / 55.0).clamp(-0.60, 0.60);
+    // Subtle 0.09 (9%) to 0.145 (14.5%) volume so it gently colors the background music
+    final double proximity = (1.0 - (bestAbsDiff / 65.0)).clamp(0.0, 1.0);
+    final double volume = 0.09 + 0.055 * proximity;
+    final double pan = (signedDiffForBest / 55.0).clamp(-0.55, 0.55);
 
     return _DirectionalSpot(
       zoneIndex: bestZone,
@@ -335,183 +401,138 @@ class AudioService {
   }
 
   // ---------------------------------------------------------------------------
-  // LAYER 1: WORLD + ATMOSPHERE BASE AMBIENT SYNTHESIZER (6.0s SEAMLESS LOOP)
+  // GENTLE, NATURAL 360° ENVIRONMENTAL TEXTURE SYNTHESIZER (5.0s LOOP)
+  // Soft surf, crackling fire, water trickle, gentle breeze — no harsh beeps.
   // ---------------------------------------------------------------------------
-  Uint8List _buildWorldAmbientWav(
-    String worldId,
-    CoconutAtmosphereMode atmosphere,
-    CoconutStyleMode style,
-  ) {
+  Uint8List _buildSubtleDirectionalWav(String worldId, int zoneIndex) {
     const int sampleRate = 22050;
-    const int durationSeconds = 6;
+    const int durationSeconds = 5;
     const int numSamples = sampleRate * durationSeconds;
     final ByteData data = ByteData(44 + numSamples * 2);
 
     _writeWavHeader(data, sampleRate, numSamples);
-    final math.Random rng = math.Random(
-      worldId.hashCode ^ (atmosphere.index * 31) ^ (style.index * 7),
-    );
-
-    double lpNoise1 = 0.0;
-    double lpNoise2 = 0.0;
-
-    // Select chord voicings per world & atmosphere
-    final List<double> chordFreqs = _getWorldChordFreqs(worldId, atmosphere);
-    final List<double> melodyNotes = _getWorldMelodyNotes(worldId, atmosphere);
-    final bool isRainOrSnow = atmosphere == CoconutAtmosphereMode.rain;
-    final bool isNight = atmosphere == CoconutAtmosphereMode.night;
-    final bool isLoFi = style == CoconutStyleMode.lofi;
+    final math.Random rng = math.Random(worldId.hashCode ^ (zoneIndex * 197));
+    double lpSlow = 0.0;
+    double lpMid = 0.0;
 
     for (int i = 0; i < numSamples; i++) {
       final double t = i / sampleRate;
-      final double loopProgress = t / durationSeconds;
-      final double loopRad = loopProgress * 2.0 * math.pi;
-
-      // 1. Warm harmonic pad with slow breathing modulation
-      final double breath = 0.76 + 0.24 * math.sin(loopRad);
-      double pad = 0.0;
-      for (int c = 0; c < chordFreqs.length; c++) {
-        final double freq = chordFreqs[c];
-        final double detune = 1.0 + math.sin(loopRad + c) * (isLoFi ? 0.0022 : 0.0006);
-        pad += math.sin(2.0 * math.pi * freq * detune * t + c * 0.9) *
-            (0.14 / (1.0 + c * 0.35));
-        // Soft sub-octave warmth on root
-        if (c == 0) {
-          pad += math.sin(2.0 * math.pi * (freq * 0.5) * t) * 0.09;
-        }
-      }
-
-      // 2. Gentle melodic motif (4 notes across the 6-second loop)
-      final int noteSlot = ((loopProgress * 4.0).floor()).clamp(0, 3);
-      final double slotPhase = (loopProgress * 4.0) - noteSlot;
-      final double noteEnv =
-          math.sin(slotPhase * math.pi) * math.exp(-slotPhase * 2.4);
-      final double noteFreq = melodyNotes[noteSlot % melodyNotes.length];
-      double motif = 0.0;
-      if (worldId == 'mossy_rock' || worldId == 'christmas_tree') {
-        // Bell / Koto / Music-box pluck overtones
-        motif = (math.sin(2.0 * math.pi * noteFreq * t) * 0.11 +
-                math.sin(2.0 * math.pi * noteFreq * 2.0 * t) * 0.04) *
-            noteEnv;
-      } else if (worldId == 'street_lamp') {
-        // Warm electric piano / jazz Rhodes tone
-        motif = (math.sin(2.0 * math.pi * noteFreq * t) * 0.10 +
-                math.sin(2.0 * math.pi * noteFreq * 3.0 * t) * 0.025) *
-            noteEnv;
-      } else {
-        // Soft acoustic / marimba / flute overtone
-        motif = math.sin(2.0 * math.pi * noteFreq * t) * 0.09 * noteEnv;
-      }
-
-      // 3. Environmental texture (Ocean waves, Alpine wind, Bamboo stream, Rain/Snow)
-      final double rawNoise = rng.nextDouble() * 2.0 - 1.0;
-      lpNoise1 = lpNoise1 * 0.965 + rawNoise * 0.035;
-      lpNoise2 = lpNoise2 * 0.88 + rawNoise * 0.12;
-
-      double envSound = 0.0;
-      switch (worldId) {
-        case 'coconut':
-          // Rolling Pacific ocean surf (two wave crests per 6s loop)
-          final double waveCrest =
-              0.5 + 0.5 * math.sin(loopRad * 1.0 - 0.6);
-          envSound = lpNoise1 * (0.22 + 0.38 * waveCrest) +
-              lpNoise2 * (0.06 * waveCrest);
-        case 'pine_tree':
-          // Soft Nordic alpine breeze + Aurora shimmer in night mode
-          final double windGust = 0.5 + 0.5 * math.sin(loopRad * 2.0);
-          envSound = lpNoise1 * (isRainOrSnow ? 0.42 : 0.22) * windGust;
-          if (isNight) {
-            envSound += math.sin(2.0 * math.pi * 880.0 * t + math.sin(loopRad) * 3.0) *
-                0.025 *
-                windGust;
-          }
-        case 'mossy_rock':
-          // Trickling Zen garden brook + night crickets
-          envSound = lpNoise2 * 0.14;
-          if (isNight) {
-            final double cricketEnv =
-                math.max(0.0, math.sin(loopRad * 6.0)) * 0.03;
-            envSound += math.sin(2.0 * math.pi * 3800.0 * t) * cricketEnv;
-          }
-        case 'street_lamp':
-          // Evening city hush + warm vinyl crackle in Lo-Fi / Rain
-          envSound = lpNoise1 * 0.12;
-        case 'desert_cactus':
-          // Warm canyon breeze sweeping across sandstone
-          final double desertBreeze = 0.45 + 0.55 * math.sin(loopRad);
-          envSound = lpNoise1 * 0.24 * desertBreeze;
-        case 'christmas_tree':
-          // Festive sleigh shimmer & winter air
-          final double bellShimmer =
-              (0.5 + 0.5 * math.sin(loopRad * 8.0)) * 0.025;
-          envSound = lpNoise1 * 0.14 +
-              math.sin(2.0 * math.pi * 2637.0 * t) * bellShimmer;
-      }
-
-      // Weather overlay: Rain / Snowfall patter
-      if (isRainOrSnow) {
-        final double droplet = (rng.nextDouble() > 0.992) ? 0.18 : 0.0;
-        envSound += lpNoise2 * 0.22 + droplet;
-      }
-
-      // Lo-Fi warm vinyl dust texture
-      if (isLoFi && rng.nextDouble() > 0.996) {
-        envSound += (rng.nextDouble() * 2.0 - 1.0) * 0.09;
-      }
-
-      final double combined = ((pad * breath) + motif + envSound) * 0.85;
-      final double clamped = combined.clamp(-0.92, 0.92);
-      final int pcm16 = (clamped * 32767.0).round().clamp(-32768, 32767);
-      data.setInt16(44 + i * 2, pcm16, Endian.little);
-    }
-
-    _applySeamlessLoopCrossfade(data, numSamples, sampleRate);
-    return data.buffer.asUint8List();
-  }
-
-  // ---------------------------------------------------------------------------
-  // LAYER 2: 360° DIRECTIONAL LANDMARK SYNTHESIZER (4.0s SEAMLESS LOOP)
-  // ---------------------------------------------------------------------------
-  Uint8List _buildDirectionalZoneWav(String worldId, int zoneIndex) {
-    const int sampleRate = 22050;
-    const int durationSeconds = 4;
-    const int numSamples = sampleRate * durationSeconds;
-    final ByteData data = ByteData(44 + numSamples * 2);
-
-    _writeWavHeader(data, sampleRate, numSamples);
-    final math.Random rng = math.Random(worldId.hashCode ^ (zoneIndex * 131));
-    double filterA = 0.0;
-    double filterB = 0.0;
-
-    for (int i = 0; i < numSamples; i++) {
-      final double t = i / sampleRate;
-      final double loopProgress = t / durationSeconds;
-      final double loopRad = loopProgress * 2.0 * math.pi;
+      final double rad = (t / durationSeconds) * 2.0 * math.pi;
       final double white = rng.nextDouble() * 2.0 - 1.0;
-      filterA = filterA * 0.95 + white * 0.05;
-      filterB = filterB * 0.82 + white * 0.18;
+      lpSlow = lpSlow * 0.975 + white * 0.025;
+      lpMid = lpMid * 0.90 + white * 0.10;
 
       double sample = 0.0;
 
       switch (worldId) {
         case 'coconut':
-          sample = _synthCoconutZone(zoneIndex, t, loopProgress, loopRad, filterA, filterB, rng);
+          if (zoneIndex == 0 || zoneIndex == 1) {
+            // Soft ocean surf wash & gentle pier water
+            final double wave = 0.45 + 0.55 * math.sin(rad);
+            sample = lpSlow * 0.65 * wave;
+          } else if (zoneIndex == 3) {
+            // Warm campfire crackle
+            final double crackle = (rng.nextDouble() > 0.992) ? 0.25 : 0.0;
+            sample = lpMid * 0.25 + crackle;
+          } else {
+            // Soft tropical palm breeze & distant bamboo wind chime
+            final double chime = math.sin(2.0 * math.pi * 587.33 * t) *
+                math.exp(-((t % 2.5) * 3.8)) *
+                0.12;
+            sample = lpSlow * 0.35 + chime;
+          }
         case 'pine_tree':
-          sample = _synthPineTreeZone(zoneIndex, t, loopProgress, loopRad, filterA, filterB, rng);
+          if (zoneIndex == 0) {
+            // Soft rhythmic steam train whoosh in distance
+            final double chug = (0.5 + 0.5 * math.sin(rad * 6.0));
+            sample = lpMid * 0.38 * chug;
+          } else if (zoneIndex == 1 || zoneIndex == 3) {
+            // Bubbling warm hot tub / campfire & waterfall
+            final double crackle = (rng.nextDouble() > 0.993) ? 0.20 : 0.0;
+            sample = lpSlow * 0.45 + crackle;
+          } else {
+            // Soft alpine snow breeze & distant sleigh shimmer
+            final double bell = math.sin(2.0 * math.pi * 1568.0 * t) *
+                math.exp(-((t % 2.5) * 5.0)) *
+                0.08;
+            sample = lpSlow * 0.40 + bell;
+          }
         case 'mossy_rock':
-          sample = _synthMossyRockZone(zoneIndex, t, loopProgress, loopRad, filterA, filterB, rng);
+          if (zoneIndex == 0 || zoneIndex == 3) {
+            // Gentle bamboo Kakei water drop & hot spring stream
+            final double dropT = t % 2.5;
+            final double drop = math.sin(2.0 * math.pi * 660.0 * t) *
+                math.exp(-dropT * 10.0) *
+                0.18;
+            sample = lpSlow * 0.38 + drop;
+          } else if (zoneIndex == 4) {
+            // Deep, warm distant templeBonsho resonance
+            final double bell = (math.sin(2.0 * math.pi * 110.0 * t) * 0.22 +
+                    math.sin(2.0 * math.pi * 220.0 * t) * 0.10) *
+                math.exp(-t * 0.9);
+            sample = bell + lpSlow * 0.25;
+          } else {
+            // Soft bamboo grove rustle & Shishi-odoshi knock
+            final double knockT = (t + 1.0) % 2.5;
+            final double knock = math.sin(2.0 * math.pi * 380.0 * t) *
+                math.exp(-knockT * 20.0) *
+                0.20;
+            sample = lpMid * 0.24 + knock;
+          }
         case 'street_lamp':
-          sample = _synthStreetLampZone(zoneIndex, t, loopProgress, loopRad, filterA, filterB, rng);
+          if (zoneIndex == 0) {
+            // Soft river water & distant vintage tram bell
+            final double bellT = t % 5.0;
+            final double bell = math.sin(2.0 * math.pi * 1174.66 * t) *
+                math.exp(-bellT * 8.0) *
+                0.15;
+            sample = lpSlow * 0.35 + bell;
+          } else if (zoneIndex == 1) {
+            // Gentle plaza stone fountain water
+            sample = lpMid * (0.32 + 0.12 * math.sin(rad * 3.0));
+          } else {
+            // Warm evening plaza ambience
+            sample = lpSlow * 0.30;
+          }
         case 'desert_cactus':
-          sample = _synthDesertCactusZone(zoneIndex, t, loopProgress, loopRad, filterA, filterB, rng);
+          if (zoneIndex == 1) {
+            // Cascading oasis waterfall & gentle caravan chime
+            final double bellT = t % 2.5;
+            final double bell = math.sin(2.0 * math.pi * 523.25 * t) *
+                math.exp(-bellT * 6.0) *
+                0.12;
+            sample = lpMid * 0.38 + bell;
+          } else if (zoneIndex == 3) {
+            // Crackling Bedouin desert fire
+            final double crackle = (rng.nextDouble() > 0.991) ? 0.22 : 0.0;
+            sample = lpSlow * 0.28 + crackle;
+          } else {
+            // Warm canyon wind sweeping across sandstone
+            final double wind = 0.4 + 0.6 * math.sin(rad);
+            sample = lpSlow * 0.48 * wind;
+          }
         case 'christmas_tree':
-          sample = _synthChristmasTreeZone(zoneIndex, t, loopProgress, loopRad, filterA, filterB, rng);
+          if (zoneIndex == 0) {
+            // Distant deep Cologne Cathedral bell resonance
+            final double tollT = t % 2.5;
+            final double bell = (math.sin(2.0 * math.pi * 196.0 * t) * 0.20 +
+                    math.sin(2.0 * math.pi * 392.0 * t) * 0.09) *
+                math.exp(-tollT * 1.8);
+            sample = bell + lpSlow * 0.22;
+          } else if (zoneIndex == 3) {
+            // Warm charcoal grill sizzle & winter market murmur
+            final double sizzle = (rng.nextDouble() > 0.992) ? 0.18 : 0.0;
+            sample = lpMid * 0.26 + sizzle;
+          } else {
+            // Rhine river flow & gentle winter breeze
+            sample = lpSlow * 0.36;
+          }
         default:
-          sample = _synthCoconutZone(zoneIndex, t, loopProgress, loopRad, filterA, filterB, rng);
+          sample = lpSlow * 0.30;
       }
 
       final int pcm16 =
-          (sample.clamp(-0.90, 0.90) * 32767.0).round().clamp(-32768, 32767);
+          (sample.clamp(-0.85, 0.85) * 32767.0).round().clamp(-32768, 32767);
       data.setInt16(44 + i * 2, pcm16, Endian.little);
     }
 
@@ -519,396 +540,27 @@ class AudioService {
     return data.buffer.asUint8List();
   }
 
-  /// World 1 (`coconut`) 360° Directional Zones:
-  /// 0 (0°): Ocean Sunset & Seagulls | 1 (74°): Wooden Pier & Boats
-  /// 2 (128°): Beach Village & Wind Chimes | 3 (168°): Campfire & Acoustic Guitar
-  /// 4 (235°): Tiki Bar Marimba & Lighthouse
-  double _synthCoconutZone(
-    int zone,
-    double t,
-    double p,
-    double rad,
-    double lpSlow,
-    double lpFast,
-    math.Random rng,
-  ) {
-    switch (zone) {
-      case 0: // 🌅 Ocean waves + distant seagull call
-        final double surf = (0.4 + 0.6 * math.sin(rad)) * lpSlow * 0.55;
-        final double gullWindow = (p > 0.30 && p < 0.48)
-            ? math.sin(((p - 0.30) / 0.18) * math.pi)
-            : 0.0;
-        final double gullFreq = 1480.0 - 320.0 * ((p - 0.30) / 0.18);
-        final double gull =
-            math.sin(2.0 * math.pi * gullFreq * t) * gullWindow * 0.08;
-        return surf + gull;
-      case 1: // 🌉 Wooden pier water lapping & boat mast chime
-        final double lap =
-            math.max(0.0, math.sin(rad * 3.0)) * lpFast * 0.32;
-        final double mastBell = math.sin(2.0 * math.pi * 1046.5 * t) *
-            math.exp(-((t % 2.0) * 5.0)) *
-            0.09;
-        return lap + mastBell;
-      case 2: // 🏡 Beach village veranda bamboo/shell wind chimes
-        const List<double> chimeNotes = [587.33, 659.25, 783.99, 880.0, 1046.5];
-        final int idx = ((t * 2.5).floor()) % chimeNotes.length;
-        final double localT = (t * 2.5) % 1.0;
-        final double chime = math.sin(2.0 * math.pi * chimeNotes[idx] * t) *
-            math.exp(-localT * 4.5) *
-            0.16;
-        return chime + lpSlow * 0.15;
-      case 3: // 🔥 Crackling campfire + 7 friends acoustic guitar strumming
-        const List<double> guitarNotes = [196.0, 246.94, 293.66, 392.0, 329.63, 293.66, 246.94, 196.0];
-        final int step = ((t * 2.0).floor()) % guitarNotes.length;
-        final double pluckT = (t * 2.0) % 1.0;
-        final double f = guitarNotes[step];
-        final double guitar = (math.sin(2.0 * math.pi * f * t) * 0.20 +
-                math.sin(2.0 * math.pi * f * 2.0 * t) * 0.09 +
-                math.sin(2.0 * math.pi * f * 3.0 * t) * 0.04) *
-            math.exp(-pluckT * 4.2);
-        final double fireCrackle =
-            (rng.nextDouble() > 0.985 ? 0.22 : 0.0) + lpFast * 0.12;
-        return guitar + fireCrackle;
-      default: // 🍹 Tiki Bar upbeat island marimba groove
-        const List<double> tikiNotes = [293.66, 369.99, 440.0, 587.33, 440.0, 369.99, 329.63, 293.66];
-        final int step = ((t * 4.0).floor()) % tikiNotes.length;
-        final double beatT = (t * 4.0) % 1.0;
-        final double f = tikiNotes[step];
-        final double marimba = (math.sin(2.0 * math.pi * f * t) * 0.22 +
-                math.sin(2.0 * math.pi * f * 4.0 * t) * 0.05) *
-            math.exp(-beatT * 7.5);
-        return marimba + lpSlow * 0.10;
-    }
-  }
-
-  /// World 2 (`pine_tree`) 360° Directional Zones:
-  /// 0 (0°): Viaduct Polar Express Steam Train | 1 (74°): Stavkirke & Steaming Hot Tub
-  /// 2 (128°): Ski Slope & Watermill | 3 (168°): Husky Campfire & Waterfall
-  /// 4 (235°): Reindeer Sleigh Bells & Cable Car
-  double _synthPineTreeZone(
-    int zone,
-    double t,
-    double p,
-    double rad,
-    double lpSlow,
-    double lpFast,
-    math.Random rng,
-  ) {
-    switch (zone) {
-      case 0: // 🚂 Polar Express steam chug rhythm + distant train whistle
-        final double chugBeat = (t * 4.0) % 1.0;
-        final double chug = lpFast * math.exp(-chugBeat * 6.0) * 0.45;
-        final double whistleEnv = (p > 0.55 && p < 0.82)
-            ? math.sin(((p - 0.55) / 0.27) * math.pi)
-            : 0.0;
-        final double whistle = (math.sin(2.0 * math.pi * 349.23 * t) * 0.10 +
-                math.sin(2.0 * math.pi * 440.0 * t) * 0.09 +
-                math.sin(2.0 * math.pi * 523.25 * t) * 0.07) *
-            whistleEnv;
-        return chug + whistle;
-      case 1: // ⛪ Stavkirke wooden sanctuary bell + bubbling hot tub
-        final double bellEnv = math.exp(-((t % 2.0) * 2.6));
-        final double churchBell = (math.sin(2.0 * math.pi * 261.63 * t) * 0.18 +
-                math.sin(2.0 * math.pi * 523.25 * t) * 0.07) *
-            bellEnv;
-        final double bubbles =
-            lpSlow * (0.25 + 0.20 * math.sin(rad * 14.0));
-        return churchBell + bubbles;
-      case 2: // ⛷️ Ski carving swoosh on snow + wooden watermill rhythm
-        final double skiSwoosh =
-            math.max(0.0, math.sin(rad * 2.0)) * lpFast * 0.36;
-        final double wheelPulse = math.sin(2.0 * math.pi * 196.0 * t) *
-            (0.5 + 0.5 * math.sin(rad * 4.0)) *
-            0.10;
-        return skiSwoosh + wheelPulse;
-      case 3: // 🛷 Laponia campfire crackle + glacier waterfall rush
-        final double crackle =
-            (rng.nextDouble() > 0.984 ? 0.24 : 0.0) + lpFast * 0.28;
-        final double nordicHarp =
-            math.sin(2.0 * math.pi * 349.23 * t) *
-                math.exp(-((t % 1.0) * 4.0)) *
-                0.14;
-        return crackle + nordicHarp;
-      default: // 🦌 Reindeer sleigh jingle bells & cable car hum
-        final double jingleBeat = (t * 6.0) % 1.0;
-        final double sleighBells = (math.sin(2.0 * math.pi * 2093.0 * t) * 0.10 +
-                math.sin(2.0 * math.pi * 2637.0 * t) * 0.08) *
-            math.exp(-jingleBeat * 8.0);
-        final double cableHum = math.sin(2.0 * math.pi * 130.81 * t) * 0.10;
-        return sleighBells + cableHum + lpSlow * 0.12;
-    }
-  }
-
-  /// World 3 (`mossy_rock`) 360° Directional Zones:
-  /// 0 (0°): Lake Torii & Kakei Water Drip | 1 (74°): Bridge & Koto Melody
-  /// 2 (128°): Pagoda Furin Chime & Shishi-odoshi | 3 (168°): Steaming Onsen
-  /// 4 (235°): Bamboo Forest & Deep Bonsho Temple Bell
-  double _synthMossyRockZone(
-    int zone,
-    double t,
-    double p,
-    double rad,
-    double lpSlow,
-    double lpFast,
-    math.Random rng,
-  ) {
-    switch (zone) {
-      case 0: // ⛩️ Bamboo Kakei water droplet plink + calm lake ripple
-        final double dripT = t % 1.0;
-        final double dripFreq = 780.0 + 420.0 * math.exp(-dripT * 18.0);
-        final double waterDrop = math.sin(2.0 * math.pi * dripFreq * t) *
-            math.exp(-dripT * 11.0) *
-            0.24;
-        return waterDrop + lpSlow * 0.16;
-      case 1: // 🌸 Traditional Japanese Koto pentatonic arpeggio
-        const List<double> koto = [293.66, 329.63, 392.0, 440.0, 587.33, 440.0, 392.0, 329.63];
-        final int idx = ((t * 2.0).floor()) % koto.length;
-        final double pluckT = (t * 2.0) % 1.0;
-        final double f = koto[idx];
-        final double kotoSound = (math.sin(2.0 * math.pi * f * t) * 0.22 +
-                math.sin(2.0 * math.pi * f * 2.0 * t) * 0.08) *
-            math.exp(-pluckT * 5.0);
-        return kotoSound;
-      case 2: // 🍵 Shishi-odoshi bamboo clack + Furin glass wind chime
-        final double clackT = t % 2.0;
-        final double bambooClack = (math.sin(2.0 * math.pi * 420.0 * t) * 0.28 +
-                math.sin(2.0 * math.pi * 680.0 * t) * 0.16) *
-            math.exp(-clackT * 22.0);
-        final double furinT = (t + 0.7) % 1.0;
-        final double furin = math.sin(2.0 * math.pi * 1760.0 * t) *
-            math.exp(-furinT * 6.5) *
-            0.11;
-        return bambooClack + furin;
-      case 3: // ♨️ Steaming Onsen hot spring water + evening frog/cricket trill
-        final double springStream =
-            lpSlow * 0.28 + lpFast * (0.14 + 0.08 * math.sin(rad * 6.0));
-        final double shakuhachi =
-            math.sin(2.0 * math.pi * 293.66 * t + math.sin(rad) * 0.4) *
-                (0.5 + 0.5 * math.sin(rad)) *
-                0.11;
-        return springStream + shakuhachi;
-      default: // 🎍 Deep bronze Bonsho temple bell + bamboo grove rustle
-        final double bellT = t % 4.0;
-        final double bonsho = (math.sin(2.0 * math.pi * 110.0 * t) * 0.26 +
-                math.sin(2.0 * math.pi * 220.0 * t) * 0.14 +
-                math.sin(2.0 * math.pi * 329.63 * t) * 0.07) *
-            math.exp(-bellT * 1.1);
-        return bonsho + lpFast * 0.12;
-    }
-  }
-
-  /// World 4 (`street_lamp`) 360° Directional Zones:
-  /// 0 (0°): Vintage Tram Bell & River Bridge | 1 (74°): Fountain & Street Trio
-  /// 2 (128°): Café de Nuit Saxophonist | 3 (168°): Jazz Club Walking Bass
-  /// 4 (235°): Carousel Music Box & Clock Tower Chime
-  double _synthStreetLampZone(
-    int zone,
-    double t,
-    double p,
-    double rad,
-    double lpSlow,
-    double lpFast,
-    math.Random rng,
-  ) {
-    switch (zone) {
-      case 0: // 🚋 Vintage yellow tram double-bell "ding-ding!" + river water
-        final double dingT = t % 2.0;
-        double tramBell = 0.0;
-        if (dingT < 0.25) {
-          tramBell = math.sin(2.0 * math.pi * 1318.5 * t) *
-              math.exp(-dingT * 16.0) *
-              0.24;
-        } else if (dingT >= 0.28 && dingT < 0.65) {
-          tramBell = math.sin(2.0 * math.pi * 1568.0 * t) *
-              math.exp(-(dingT - 0.28) * 14.0) *
-              0.24;
-        }
-        return tramBell + lpSlow * 0.20;
-      case 1: // 🎻 Plaza stone fountain water + Parisian accordion waltz
-        const List<double> waltz = [220.0, 261.63, 329.63, 293.66, 246.94, 196.0];
-        final int step = ((t * 1.5).floor()) % waltz.length;
-        final double f = waltz[step];
-        final double vibrato = 1.0 + math.sin(2.0 * math.pi * 5.5 * t) * 0.004;
-        final double accordion = (math.sin(2.0 * math.pi * f * vibrato * t) * 0.14 +
-                math.sin(2.0 * math.pi * f * 2.0 * vibrato * t) * 0.07) *
-            0.9;
-        return accordion + lpFast * 0.18;
-      case 2: // ☕ Café de Nuit smooth solo saxophone melody
-        const List<double> saxNotes = [293.66, 329.63, 392.0, 493.88, 440.0, 392.0, 329.63, 246.94];
-        final int step = ((t * 2.0).floor()) % saxNotes.length;
-        final double noteT = (t * 2.0) % 1.0;
-        final double f = saxNotes[step];
-        final double vib = 1.0 + math.sin(2.0 * math.pi * 5.0 * t) * 0.005;
-        final double env = math.sin(noteT * math.pi);
-        final double sax = (math.sin(2.0 * math.pi * f * vib * t) * 0.18 +
-                math.sin(2.0 * math.pi * f * 2.0 * vib * t) * 0.10 +
-                math.sin(2.0 * math.pi * f * 3.0 * vib * t) * 0.05) *
-            env;
-        return sax;
-      case 3: // 🎷 Le Chat Noir Jazz Club walking upright bass & Rhodes chord
-        const List<double> bassLine = [82.41, 98.0, 110.0, 123.47, 146.83, 123.47, 110.0, 98.0];
-        final int step = ((t * 2.0).floor()) % bassLine.length;
-        final double pluckT = (t * 2.0) % 1.0;
-        final double bf = bassLine[step];
-        final double bass = (math.sin(2.0 * math.pi * bf * t) * 0.26 +
-                math.sin(2.0 * math.pi * bf * 2.0 * t) * 0.12) *
-            math.exp(-pluckT * 3.8);
-        return bass + lpSlow * 0.08;
-      default: // 🕰️ Illuminated Carousel music box waltz & clock tower chime
-        const List<double> boxNotes = [523.25, 659.25, 783.99, 1046.5, 987.77, 783.99, 659.25, 587.33];
-        final int step = ((t * 2.0).floor()) % boxNotes.length;
-        final double localT = (t * 2.0) % 1.0;
-        final double f = boxNotes[step];
-        final double musicBox = (math.sin(2.0 * math.pi * f * t) * 0.18 +
-                math.sin(2.0 * math.pi * f * 2.0 * t) * 0.05) *
-            math.exp(-localT * 5.5);
-        return musicBox;
-    }
-  }
-
-  /// World 5 (`desert_cactus`) 360° Directional Zones:
-  /// 0 (15°): Hot Air Balloons & Canyon Steam Train | 1 (74°): Oasis Waterfall & Caravan
-  /// 2 (122°): Petra Treasury & Bazaar Chimes | 3 (165°): Bedouin Fire & Oud Melody
-  /// 4 (230°): Windmill & Cosmic Observatory
-  double _synthDesertCactusZone(
-    int zone,
-    double t,
-    double p,
-    double rad,
-    double lpSlow,
-    double lpFast,
-    math.Random rng,
-  ) {
-    switch (zone) {
-      case 0: // 🚂 Balloon burner flame whoosh + Wild West canyon steam train
-        final double burnerWhoosh =
-            (p < 0.35 ? math.sin((p / 0.35) * math.pi) : 0.0) * lpFast * 0.45;
-        final double trainChug =
-            lpSlow * (0.25 + 0.25 * math.sin(rad * 8.0));
-        return burnerWhoosh + trainChug;
-      case 1: // 🐪 Canyon waterfall splash + camel caravan brass bells
-        const List<double> bellNotes = [587.33, 739.99, 880.0, 587.33];
-        final int idx = ((t * 2.0).floor()) % bellNotes.length;
-        final double localT = (t * 2.0) % 1.0;
-        final double caravanBell =
-            math.sin(2.0 * math.pi * bellNotes[idx] * t) *
-                math.exp(-localT * 6.0) *
-                0.15;
-        return caravanBell + lpFast * 0.25;
-      case 2: // 🏛️ Petra sandstone resonance & Eastern bazaar copper chimes
-        const List<double> hijaz = [293.66, 311.13, 369.99, 392.0, 440.0, 392.0, 369.99, 311.13];
-        final int idx = ((t * 2.0).floor()) % hijaz.length;
-        final double localT = (t * 2.0) % 1.0;
-        final double f = hijaz[idx];
-        final double bazaar = (math.sin(2.0 * math.pi * f * t) * 0.18 +
-                math.sin(2.0 * math.pi * f * 2.0 * t) * 0.07) *
-            math.exp(-localT * 4.2);
-        return bazaar;
-      case 3: // 🔥 Bedouin campfire crackle & acoustic Oud melody
-        const List<double> oudNotes = [146.83, 220.0, 233.08, 277.18, 293.66, 277.18, 233.08, 220.0];
-        final int idx = ((t * 2.0).floor()) % oudNotes.length;
-        final double pluckT = (t * 2.0) % 1.0;
-        final double f = oudNotes[idx];
-        final double oud = (math.sin(2.0 * math.pi * f * t) * 0.22 +
-                math.sin(2.0 * math.pi * f * 2.0 * t) * 0.10 +
-                math.sin(2.0 * math.pi * f * 3.0 * t) * 0.05) *
-            math.exp(-pluckT * 4.5);
-        final double fire = (rng.nextDouble() > 0.985 ? 0.20 : 0.0) + lpFast * 0.10;
-        return oud + fire;
-      default: // 🔭 Spinning wooden windmill & starry observatory harmonic pad
-        final double cosmic = (math.sin(2.0 * math.pi * 220.0 * t) * 0.12 +
-                math.sin(2.0 * math.pi * 329.63 * t) * 0.10 +
-                math.sin(2.0 * math.pi * 493.88 * t) * 0.08) *
-            (0.65 + 0.35 * math.sin(rad));
-        return cosmic + lpSlow * 0.14;
-    }
-  }
-
-  /// World 6 (`christmas_tree`) 360° Directional Zones:
-  /// 0 (0°): Cologne Cathedral Bells & Choir | 1 (72°): Heumarkt Ice Rink Waltz
-  /// 2 (128°): Christmas Pyramid & Glühwein Market | 3 (176°): Ferris Wheel & Grill
-  /// 4 (252°): Rhine River & Hohenzollern Bridge ICE Train
-  double _synthChristmasTreeZone(
-    int zone,
-    double t,
-    double p,
-    double rad,
-    double lpSlow,
-    double lpFast,
-    math.Random rng,
-  ) {
-    switch (zone) {
-      case 0: // ⛪ Kölner Dom Cathedral deep tolling bell + choir pad
-        final double tollT = t % 2.0;
-        final double cathedralBell = (math.sin(2.0 * math.pi * 196.0 * t) * 0.22 +
-                math.sin(2.0 * math.pi * 392.0 * t) * 0.12 +
-                math.sin(2.0 * math.pi * 587.33 * t) * 0.06) *
-            math.exp(-tollT * 1.8);
-        final double choir = (math.sin(2.0 * math.pi * 261.63 * t) * 0.08 +
-                math.sin(2.0 * math.pi * 329.63 * t) * 0.07) *
-            (0.6 + 0.4 * math.sin(rad));
-        return cathedralBell + choir;
-      case 1: // ⛸️ Heumarkt Ice Rink celesta waltz + skate blade glide
-        const List<double> rinkNotes = [523.25, 659.25, 783.99, 659.25, 587.33, 783.99, 659.25, 523.25];
-        final int step = ((t * 2.0).floor()) % rinkNotes.length;
-        final double localT = (t * 2.0) % 1.0;
-        final double f = rinkNotes[step];
-        final double celesta = (math.sin(2.0 * math.pi * f * t) * 0.18 +
-                math.sin(2.0 * math.pi * f * 2.0 * t) * 0.05) *
-            math.exp(-localT * 5.2);
-        return celesta + lpFast * 0.12;
-      case 2: // 🎄 Spinning Christmas Pyramid chimes & warm market carol
-        const List<double> carol = [392.0, 440.0, 392.0, 329.63, 523.25, 493.88, 440.0, 392.0];
-        final int step = ((t * 2.0).floor()) % carol.length;
-        final double localT = (t * 2.0) % 1.0;
-        final double f = carol[step];
-        final double chime = (math.sin(2.0 * math.pi * f * t) * 0.20 +
-                math.sin(2.0 * math.pi * f * 3.0 * t) * 0.05) *
-            math.exp(-localT * 4.5);
-        return chime;
-      case 3: // 🎡 Schwenkgrill charcoal sizzle & fairground organ
-        const List<double> organNotes = [261.63, 329.63, 392.0, 523.25, 392.0, 329.63];
-        final int step = ((t * 1.5).floor()) % organNotes.length;
-        final double f = organNotes[step];
-        final double organ = (math.sin(2.0 * math.pi * f * t) * 0.14 +
-                math.sin(2.0 * math.pi * f * 2.0 * t) * 0.07) *
-            0.85;
-        final double sizzle = lpFast * 0.18 + (rng.nextDouble() > 0.985 ? 0.14 : 0.0);
-        return organ + sizzle;
-      default: // 🌉 Rhine River water flow & Hohenzollern Bridge train hum
-        final double rhineWater = lpSlow * 0.28;
-        final double trainDrone = (math.sin(2.0 * math.pi * 110.0 * t) * 0.12 +
-                math.sin(2.0 * math.pi * 164.81 * t) * 0.08) *
-            (0.5 + 0.5 * math.sin(rad));
-        return rhineWater + trainDrone;
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // LAYER 3: WORLD-THEMED OBJECT INTERACTION CHIME (340ms)
-  // ---------------------------------------------------------------------------
   Uint8List _buildWorldChimeWav(String worldId) {
     const int sampleRate = 22050;
-    const int numSamples = 7500; // ~340ms
+    const int numSamples = 6600; // ~300ms
     final ByteData data = ByteData(44 + numSamples * 2);
     _writeWavHeader(data, sampleRate, numSamples);
 
     final List<double> freqs = switch (worldId) {
-      'coconut' => const [392.0, 587.33, 783.99], // Tropical G5 marimba chord
-      'pine_tree' => const [523.25, 659.25, 1046.5], // Crystalline Nordic C6
-      'mossy_rock' => const [440.0, 659.25, 880.0], // Zen temple bell A5
-      'street_lamp' => const [329.63, 493.88, 659.25], // Warm Jazz Em9 chime
-      'desert_cactus' => const [293.66, 440.0, 587.33], // Desert Oud D5 harmonic
-      'christmas_tree' => const [523.25, 783.99, 1318.5], // Festive sparkle E6
-      _ => const [528.0, 792.0, 1056.0],
+      'coconut' => const [392.0, 587.33],
+      'pine_tree' => const [523.25, 659.25],
+      'mossy_rock' => const [440.0, 659.25],
+      'street_lamp' => const [329.63, 493.88],
+      'desert_cactus' => const [293.66, 440.0],
+      'christmas_tree' => const [523.25, 783.99],
+      _ => const [440.0, 659.25],
     };
 
     for (int i = 0; i < numSamples; i++) {
       final double t = i / sampleRate;
-      final double env = math.exp(-t * 11.5);
-      final double signal = (math.sin(2.0 * math.pi * freqs[0] * t) * 0.42 +
-              math.sin(2.0 * math.pi * freqs[1] * t) * 0.28 +
-              math.sin(2.0 * math.pi * freqs[2] * t) * 0.16) *
+      final double env = math.exp(-t * 13.0);
+      final double signal = (math.sin(2.0 * math.pi * freqs[0] * t) * 0.36 +
+              math.sin(2.0 * math.pi * freqs[1] * t) * 0.20) *
           env;
       final int pcm16 = (signal * 32767.0).round().clamp(-32768, 32767);
       data.setInt16(44 + i * 2, pcm16, Endian.little);
@@ -917,55 +569,12 @@ class AudioService {
     return data.buffer.asUint8List();
   }
 
-  List<double> _getWorldChordFreqs(
-    String worldId,
-    CoconutAtmosphereMode atmosphere,
-  ) {
-    final double shift = switch (atmosphere) {
-      CoconutAtmosphereMode.sunset => 1.0,
-      CoconutAtmosphereMode.night => 0.8909, // 2 semitones lower, deeper & calmer
-      CoconutAtmosphereMode.noon => 1.0595, // 1 semitone brighter
-      CoconutAtmosphereMode.rain => 0.9439, // Mellow minor/lo-fi warmth
-    };
-
-    final List<double> base = switch (worldId) {
-      'coconut' => const [196.0, 246.94, 293.66, 369.99], // Gmaj7
-      'pine_tree' => const [174.61, 220.0, 261.63, 329.63], // Fmaj7
-      'mossy_rock' => const [220.0, 261.63, 329.63, 392.0], // Am7 Pentatonic
-      'street_lamp' => const [164.81, 196.0, 246.94, 293.66], // Em7 Noir Jazz
-      'desert_cactus' => const [146.83, 220.0, 277.18, 329.63], // Dadd9 Canyon
-      'christmas_tree' => const [261.63, 329.63, 392.0, 493.88], // Festive Cmaj7
-      _ => const [220.0, 277.18, 329.63],
-    };
-
-    return base.map((f) => f * shift).toList(growable: false);
-  }
-
-  List<double> _getWorldMelodyNotes(
-    String worldId,
-    CoconutAtmosphereMode atmosphere,
-  ) {
-    final double shift =
-        atmosphere == CoconutAtmosphereMode.night ? 0.8909 : 1.0;
-    final List<double> base = switch (worldId) {
-      'coconut' => const [392.0, 493.88, 587.33, 493.88],
-      'pine_tree' => const [349.23, 440.0, 523.25, 659.25],
-      'mossy_rock' => const [440.0, 523.25, 659.25, 587.33],
-      'street_lamp' => const [329.63, 392.0, 493.88, 440.0],
-      'desert_cactus' => const [293.66, 369.99, 440.0, 329.63],
-      'christmas_tree' => const [523.25, 659.25, 783.99, 659.25],
-      _ => const [440.0, 523.25, 659.25, 523.25],
-    };
-    return base.map((f) => f * shift).toList(growable: false);
-  }
-
-  /// Smooths the first and last 60ms of the WAV buffer so looping has zero click.
   void _applySeamlessLoopCrossfade(
     ByteData data,
     int numSamples,
     int sampleRate,
   ) {
-    final int fadeSamples = (sampleRate * 0.06).round();
+    final int fadeSamples = (sampleRate * 0.08).round();
     for (int i = 0; i < fadeSamples && i < numSamples ~/ 2; i++) {
       final double fadeIn = 0.5 - 0.5 * math.cos((i / fadeSamples) * math.pi);
       final int startIdx = 44 + i * 2;
@@ -993,13 +602,13 @@ class AudioService {
       data.setUint8(36 + i, dataTag[i]);
     }
     data.setUint32(4, 36 + dataByteSize, Endian.little);
-    data.setUint32(16, 16, Endian.little); // PCM chunk size
-    data.setUint16(20, 1, Endian.little); // AudioFormat = 1 (PCM)
-    data.setUint16(22, 1, Endian.little); // NumChannels = 1 (Mono)
+    data.setUint32(16, 16, Endian.little);
+    data.setUint16(20, 1, Endian.little);
+    data.setUint16(22, 1, Endian.little);
     data.setUint32(24, sampleRate, Endian.little);
-    data.setUint32(28, sampleRate * 2, Endian.little); // ByteRate
-    data.setUint16(32, 2, Endian.little); // BlockAlign
-    data.setUint16(34, 16, Endian.little); // BitsPerSample
+    data.setUint32(28, sampleRate * 2, Endian.little);
+    data.setUint16(32, 2, Endian.little);
+    data.setUint16(34, 16, Endian.little);
     data.setUint32(40, dataByteSize, Endian.little);
   }
 }

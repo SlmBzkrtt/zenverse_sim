@@ -48,7 +48,7 @@ lib/
 │   ├── main_menu_screen.dart                      # Interactive 360° live preview stage & swipeable world selector
 │   └── coconut_simulator_screen.dart              # Fullscreen 360° simulator HUD, POI chips & Cinematic Display Mode
 └── services/
-    ├── audio_service.dart                         # Procedural 16-bit PCM WAV ambient drone & harmonic chime synthesizer
+    ├── audio_service.dart                         # 12-track studio music playlist + subtle 10-15% 360° spatial audio engine
     └── storage_service.dart                       # SharedPreferences persistence for world, style, atmosphere & meditation time
 ```
 
@@ -64,10 +64,9 @@ lib/
    - Both screens implement `WidgetsBindingObserver` (`didChangeAppLifecycleState`) to automatically pause `Ticker` loops, timers, and ambient audio when backgrounded, preventing battery drain and thermal throttling.
 4. **Responsive & Adaptive Layout (`ResponsiveViewport`):**
    - Built with `LayoutBuilder`, `SafeArea`, `FittedBox`, and `AspectRatio` to scale seamlessly across compact phones, foldables, tablets, and desktop windows without pixel overflows.
-5. **360° Spatial & Theme-Reactive Procedural Audio Engine (`AudioService`):**
-   - Synthesizes dual-layer 16-bit PCM WAV soundscapes cached to local storage (`DeviceFileSource` for full macOS, iOS & Android compatibility):
-     - **Layer 1 (World & Atmosphere Base Loop):** Adapts harmonies, melodies, and weather textures (ocean waves, alpine wind, bamboo stream, rain/snowfall, night crickets, vinyl warmth) to each world and atmosphere mode.
-     - **Layer 2 (360° Directional Landmark Audio & Stereo Panning):** Dynamically switches and pans among 5 directional landmark soundscapes per world (campfire guitar, Tiki marimba, Polar Express steam train, Koto & Bonsho temple bell, Café de Nuit saxophone, Bedouin Oud, Cologne Cathedral bells & ice rink waltz) as you rotate 360°.
+5. **12-Track Full-Length Theme Music & Subtle 360° Spatial Audio (`AudioService`):**
+   - **Layer 1 (2 Full-Length Studio Songs per World in `assets/music/`):** Plays continuous, full-length AAC (`.m4a`) instrumental soundtracks tailored to each world (*Bossa Antigua* & *Port Horizon* for Pacific Beach, *Frost Waltz* & *Floating Cities* for Lapland, *Ishikari Lore* & *Eastern Thought* for Kyoto Zen, *Night on the Docks - Sax* & *Lobby Time* for European Night Plaza, *Desert City* & *East of Tunesia* for Red Canyon, *Silent Night* & *Dance of the Sugar Plum Fairy* for Cologne Christmas Market).
+   - **Layer 2 (Subtle 10%–15% 360° Directional Environmental Color):** Gently layers soft ocean waves, crackling campfire, bamboo water drops, fountain water, canyon wind, and distant cathedral bells with stereo panning as you rotate 360°.
 
 ---
 
