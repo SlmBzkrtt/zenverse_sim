@@ -621,6 +621,13 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   );
                 },
               ),
+              _buildPreviewControlPill(
+                label: 'ℹ️ Lisans',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  _showMusicCreditsDialog();
+                },
+              ),
             ],
           ),
           SizedBox(height: vp.isShortLandscape ? 3 : 6),
@@ -1336,4 +1343,109 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       ),
     );
   }
+
+  void _showMusicCreditsDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: const Color(0xFF151A2E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.library_music_rounded,
+                        color: Color(0xFFFFCC80),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Hakkında & Müzik Lisansları',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white70,
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Görsel dünyalar ve 360° ortam/etkileşim efekt sesleri ZenVerse motoru tarafından prosedürel olarak üretilmiştir.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.32),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.12),
+                      ),
+                    ),
+                    child: const SelectableText(
+                      '"Bossa Antigua", "Summer Day", "Frost Waltz", "Floating Cities", '
+                      '"Ishikari Lore", "Eastern Thought", "Night on the Docks - Sax", '
+                      '"Lobby Time", "Desert City", "East of Tunesia", "Silent Night", '
+                      '"Dance of the Sugar Plum Fairy"\n'
+                      'Kevin MacLeod (incompetech.com)\n'
+                      'Licensed under Creative Commons: By Attribution 4.0 License\n'
+                      'http://creativecommons.org/licenses/by/4.0/',
+                      style: TextStyle(
+                        color: Color(0xFFFFE0B2),
+                        fontSize: 11.5,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: const Text(
+                        'Tamam',
+                        style: TextStyle(
+                          color: Color(0xFFFFCC80),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
+
