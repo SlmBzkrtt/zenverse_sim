@@ -590,13 +590,13 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   child: const Text(
-                    'ZENVERSE: CHILL OBJECT SIM',
+                    GameConstants.appTitle,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 23,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 1.8,
+                      letterSpacing: 1.2,
                     ),
                   ),
                 ),

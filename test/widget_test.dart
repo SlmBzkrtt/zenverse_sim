@@ -16,7 +16,7 @@ void main() {
     await tester.pumpWidget(const ZenVerseApp());
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('ZENVERSE: CHILL OBJECT SIM'), findsOneWidget);
+    expect(find.text('ZenVerse: Chill Object Sim'), findsOneWidget);
     expect(find.text('Coconut Simulator'), findsOneWidget);
 
     // Test live preview atmosphere toggle on the Main Menu
