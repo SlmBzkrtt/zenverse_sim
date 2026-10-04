@@ -69,7 +69,12 @@ class _CoconutSimulatorScreenState extends State<CoconutSimulatorScreen>
 
     _ticker = createTicker(_onTick)..start();
     _startThoughtTimer();
-    AudioService.instance.startAmbientForWorld(widget.simulator.id);
+    AudioService.instance.startAmbientForWorld(
+      widget.simulator.id,
+      atmosphere: _gameController.atmosphereMode,
+      style: _gameController.styleMode,
+      initialYaw: _gameController.cameraYaw,
+    );
   }
 
   void _startThoughtTimer() {
@@ -130,6 +135,11 @@ class _CoconutSimulatorScreenState extends State<CoconutSimulatorScreen>
         : (elapsed - _lastElapsed).inMicroseconds / 1000000.0;
     _lastElapsed = elapsed;
     _gameController.tick(dt);
+    AudioService.instance.updateCameraOrientation(
+      yaw: _gameController.cameraYaw,
+      worldId: widget.simulator.id,
+      isMenuPreview: false,
+    );
   }
 
   @override
@@ -177,6 +187,12 @@ class _CoconutSimulatorScreenState extends State<CoconutSimulatorScreen>
       _gameController.styleMode,
       worldId: widget.simulator.id,
     );
+    AudioService.instance.startAmbientForWorld(
+      widget.simulator.id,
+      atmosphere: _gameController.atmosphereMode,
+      style: _gameController.styleMode,
+      initialYaw: _gameController.cameraYaw,
+    );
   }
 
   void _cycleRotationMode() {
@@ -194,6 +210,12 @@ class _CoconutSimulatorScreenState extends State<CoconutSimulatorScreen>
     StorageService.instance.saveAtmosphereMode(
       _gameController.atmosphereMode,
       worldId: widget.simulator.id,
+    );
+    AudioService.instance.startAmbientForWorld(
+      widget.simulator.id,
+      atmosphere: _gameController.atmosphereMode,
+      style: _gameController.styleMode,
+      initialYaw: _gameController.cameraYaw,
     );
   }
 

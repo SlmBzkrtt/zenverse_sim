@@ -64,8 +64,10 @@ lib/
    - Both screens implement `WidgetsBindingObserver` (`didChangeAppLifecycleState`) to automatically pause `Ticker` loops, timers, and ambient audio when backgrounded, preventing battery drain and thermal throttling.
 4. **Responsive & Adaptive Layout (`ResponsiveViewport`):**
    - Built with `LayoutBuilder`, `SafeArea`, `FittedBox`, and `AspectRatio` to scale seamlessly across compact phones, foldables, tablets, and desktop windows without pixel overflows.
-5. **Procedural Ambient Audio Engine (`AudioService`):**
-   - Synthesizes warm, looping stereo WAV soundscapes and harmonic interaction chimes directly in memory via `audioplayers` (`BytesSource`), requiring zero external MP3/OGG downloads.
+5. **360° Spatial & Theme-Reactive Procedural Audio Engine (`AudioService`):**
+   - Synthesizes dual-layer 16-bit PCM WAV soundscapes cached to local storage (`DeviceFileSource` for full macOS, iOS & Android compatibility):
+     - **Layer 1 (World & Atmosphere Base Loop):** Adapts harmonies, melodies, and weather textures (ocean waves, alpine wind, bamboo stream, rain/snowfall, night crickets, vinyl warmth) to each world and atmosphere mode.
+     - **Layer 2 (360° Directional Landmark Audio & Stereo Panning):** Dynamically switches and pans among 5 directional landmark soundscapes per world (campfire guitar, Tiki marimba, Polar Express steam train, Koto & Bonsho temple bell, Café de Nuit saxophone, Bedouin Oud, Cologne Cathedral bells & ice rink waltz) as you rotate 360°.
 
 ---
 

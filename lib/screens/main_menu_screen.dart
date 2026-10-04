@@ -67,7 +67,10 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     );
     _ticker = createTicker(_onTick)..start();
     AudioService.instance.startAmbientForWorld(
-      availableSimulators[_selectedIndex].id,
+      initialWorldId,
+      atmosphere: savedAtmosphere,
+      style: savedStyle,
+      initialYaw: _previewController.cameraYaw,
     );
   }
 
@@ -101,6 +104,11 @@ class _MainMenuScreenState extends State<MainMenuScreen>
         : (elapsed - _lastElapsed).inMicroseconds / 1000000.0;
     _lastElapsed = elapsed;
     _previewController.tick(dt, isMenuPreview: true);
+    AudioService.instance.updateCameraOrientation(
+      yaw: _previewController.cameraYaw,
+      worldId: availableSimulators[_selectedIndex].id,
+      isMenuPreview: true,
+    );
   }
 
   @override
@@ -130,7 +138,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       _syncPreviewWorldPreferences(nextSim);
     });
     StorageService.instance.saveSelectedWorldIndex(clamped);
-    AudioService.instance.startAmbientForWorld(nextSim.id);
+    AudioService.instance.startAmbientForWorld(
+      nextSim.id,
+      atmosphere: _previewController.atmosphereMode,
+      style: _previewController.styleMode,
+      initialYaw: _previewController.cameraYaw,
+    );
 
     if (!_pageController.hasClients) {
       return;
@@ -239,7 +252,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
               _lastElapsed = Duration.zero;
               _ticker.start();
             }
-            AudioService.instance.startAmbientForWorld(active.id);
+            AudioService.instance.startAmbientForWorld(
+              active.id,
+              atmosphere: _previewController.atmosphereMode,
+              style: _previewController.styleMode,
+              initialYaw: _previewController.cameraYaw,
+            );
             setState(() {});
           }
         });
@@ -550,6 +568,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     _previewController.styleMode,
                     worldId: activeSim.id,
                   );
+                  AudioService.instance.startAmbientForWorld(
+                    activeSim.id,
+                    atmosphere: _previewController.atmosphereMode,
+                    style: _previewController.styleMode,
+                    initialYaw: _previewController.cameraYaw,
+                  );
                 },
               ),
               _buildPreviewControlPill(
@@ -567,6 +591,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   StorageService.instance.saveAtmosphereMode(
                     _previewController.atmosphereMode,
                     worldId: activeSim.id,
+                  );
+                  AudioService.instance.startAmbientForWorld(
+                    activeSim.id,
+                    atmosphere: _previewController.atmosphereMode,
+                    style: _previewController.styleMode,
+                    initialYaw: _previewController.cameraYaw,
                   );
                 },
               ),
@@ -846,7 +876,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                         _syncPreviewWorldPreferences(nextSim);
                       });
                       StorageService.instance.saveSelectedWorldIndex(idx);
-                      AudioService.instance.startAmbientForWorld(nextSim.id);
+                      AudioService.instance.startAmbientForWorld(
+                        nextSim.id,
+                        atmosphere: _previewController.atmosphereMode,
+                        style: _previewController.styleMode,
+                        initialYaw: _previewController.cameraYaw,
+                      );
                     },
                     itemBuilder: (context, index) {
                       final ZenVerseModel sim = availableSimulators[index];
