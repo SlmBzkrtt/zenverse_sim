@@ -16,6 +16,11 @@ class StorageService {
   static const String _keyGlobalStyle = 'os_global_style';
 
   SharedPreferences? _prefs;
+  final Map<String, CoconutAtmosphereMode> _worldAtmospheres = {};
+  final Map<String, CoconutStyleMode> _worldStyles = {};
+  CoconutAtmosphereMode _globalAtmosphere = CoconutAtmosphereMode.sunset;
+  CoconutStyleMode _globalStyle = CoconutStyleMode.natural;
+
   final ValueNotifier<int> totalMeditationSeconds = ValueNotifier<int>(0);
   final ValueNotifier<bool> isAudioMuted = ValueNotifier<bool>(false);
 
@@ -26,6 +31,12 @@ class StorageService {
       totalMeditationSeconds.value =
           _prefs?.getInt(_keyTotalMeditationSec) ?? 0;
       isAudioMuted.value = _prefs?.getBool(_keyAudioMuted) ?? false;
+      final int globalAtmIdx = (_prefs?.getInt(_keyGlobalAtmosphere) ?? 0)
+          .clamp(0, CoconutAtmosphereMode.values.length - 1);
+      _globalAtmosphere = CoconutAtmosphereMode.values[globalAtmIdx];
+      final int globalStyleIdx = (_prefs?.getInt(_keyGlobalStyle) ?? 0)
+          .clamp(0, CoconutStyleMode.values.length - 1);
+      _globalStyle = CoconutStyleMode.values[globalStyleIdx];
     } catch (_) {
       // Safe fallback in headless test environments
     }
@@ -42,27 +53,69 @@ class StorageService {
     } catch (_) {}
   }
 
-  CoconutAtmosphereMode loadAtmosphereMode() {
-    final int idx = (_prefs?.getInt(_keyGlobalAtmosphere) ?? 0)
-        .clamp(0, CoconutAtmosphereMode.values.length - 1);
-    return CoconutAtmosphereMode.values[idx];
+  CoconutAtmosphereMode loadAtmosphereMode({String? worldId}) {
+    if (worldId != null) {
+      if (_worldAtmospheres.containsKey(worldId)) {
+        return _worldAtmospheres[worldId]!;
+      }
+      final int? savedIdx = _prefs?.getInt('os_atm_$worldId');
+      if (savedIdx != null) {
+        final mode = CoconutAtmosphereMode.values[
+            savedIdx.clamp(0, CoconutAtmosphereMode.values.length - 1)];
+        _worldAtmospheres[worldId] = mode;
+        return mode;
+      }
+      return CoconutAtmosphereMode.sunset;
+    }
+    return _globalAtmosphere;
   }
 
-  Future<void> saveAtmosphereMode(CoconutAtmosphereMode mode) async {
+  Future<void> saveAtmosphereMode(
+    CoconutAtmosphereMode mode, {
+    String? worldId,
+  }) async {
+    _globalAtmosphere = mode;
+    if (worldId != null) {
+      _worldAtmospheres[worldId] = mode;
+    }
     try {
       await _prefs?.setInt(_keyGlobalAtmosphere, mode.index);
+      if (worldId != null) {
+        await _prefs?.setInt('os_atm_$worldId', mode.index);
+      }
     } catch (_) {}
   }
 
-  CoconutStyleMode loadStyleMode() {
-    final int idx = (_prefs?.getInt(_keyGlobalStyle) ?? 0)
-        .clamp(0, CoconutStyleMode.values.length - 1);
-    return CoconutStyleMode.values[idx];
+  CoconutStyleMode loadStyleMode({String? worldId}) {
+    if (worldId != null) {
+      if (_worldStyles.containsKey(worldId)) {
+        return _worldStyles[worldId]!;
+      }
+      final int? savedIdx = _prefs?.getInt('os_style_$worldId');
+      if (savedIdx != null) {
+        final mode = CoconutStyleMode
+            .values[savedIdx.clamp(0, CoconutStyleMode.values.length - 1)];
+        _worldStyles[worldId] = mode;
+        return mode;
+      }
+      return CoconutStyleMode.natural;
+    }
+    return _globalStyle;
   }
 
-  Future<void> saveStyleMode(CoconutStyleMode mode) async {
+  Future<void> saveStyleMode(
+    CoconutStyleMode mode, {
+    String? worldId,
+  }) async {
+    _globalStyle = mode;
+    if (worldId != null) {
+      _worldStyles[worldId] = mode;
+    }
     try {
       await _prefs?.setInt(_keyGlobalStyle, mode.index);
+      if (worldId != null) {
+        await _prefs?.setInt('os_style_$worldId', mode.index);
+      }
     } catch (_) {}
   }
 

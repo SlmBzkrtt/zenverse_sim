@@ -173,7 +173,10 @@ class _CoconutSimulatorScreenState extends State<CoconutSimulatorScreen>
     setState(() {
       _gameController.cycleStyleMode();
     });
-    StorageService.instance.saveStyleMode(_gameController.styleMode);
+    StorageService.instance.saveStyleMode(
+      _gameController.styleMode,
+      worldId: widget.simulator.id,
+    );
   }
 
   void _cycleRotationMode() {
@@ -188,7 +191,10 @@ class _CoconutSimulatorScreenState extends State<CoconutSimulatorScreen>
     setState(() {
       _gameController.cycleAtmosphereMode();
     });
-    StorageService.instance.saveAtmosphereMode(_gameController.atmosphereMode);
+    StorageService.instance.saveAtmosphereMode(
+      _gameController.atmosphereMode,
+      worldId: widget.simulator.id,
+    );
   }
 
   void _cycleZoom() {

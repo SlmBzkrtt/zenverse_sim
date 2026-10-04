@@ -255,6 +255,16 @@ class ZenVerseController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setStyleAndAtmosphere({
+    required CoconutStyleMode style,
+    required CoconutAtmosphereMode atmosphere,
+  }) {
+    if (_styleMode == style && _atmosphereMode == atmosphere) return;
+    _styleMode = style;
+    _atmosphereMode = atmosphere;
+    notifyListeners();
+  }
+
   void cycleStyleMode() {
     final int next = (_styleMode.index + 1) % CoconutStyleMode.values.length;
     _styleMode = CoconutStyleMode.values[next];

@@ -46,9 +46,11 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     _selectedIndex = StorageService.instance.loadSelectedWorldIndex(
       maxCount: availableSimulators.length,
     );
+    final String initialWorldId = availableSimulators[_selectedIndex].id;
     final CoconutAtmosphereMode savedAtmosphere =
-        StorageService.instance.loadAtmosphereMode();
-    final CoconutStyleMode savedStyle = StorageService.instance.loadStyleMode();
+        StorageService.instance.loadAtmosphereMode(worldId: initialWorldId);
+    final CoconutStyleMode savedStyle =
+        StorageService.instance.loadStyleMode(worldId: initialWorldId);
 
     _previewController = ZenVerseController(
       scenicPoints: availableSimulators[_selectedIndex].scenicPoints,
@@ -111,17 +113,24 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     super.dispose();
   }
 
+  void _syncPreviewWorldPreferences(ZenVerseModel sim) {
+    _previewController.updateScenicPoints(sim.scenicPoints);
+    _previewController.setStyleAndAtmosphere(
+      style: StorageService.instance.loadStyleMode(worldId: sim.id),
+      atmosphere: StorageService.instance.loadAtmosphereMode(worldId: sim.id),
+    );
+  }
+
   void _animateToSimulator(int index) {
     final int clamped = index.clamp(0, availableSimulators.length - 1);
+    final ZenVerseModel nextSim = availableSimulators[clamped];
     HapticFeedback.selectionClick();
     setState(() {
       _selectedIndex = clamped;
-      _previewController.updateScenicPoints(
-        availableSimulators[clamped].scenicPoints,
-      );
+      _syncPreviewWorldPreferences(nextSim);
     });
     StorageService.instance.saveSelectedWorldIndex(clamped);
-    AudioService.instance.startAmbientForWorld(availableSimulators[clamped].id);
+    AudioService.instance.startAmbientForWorld(nextSim.id);
 
     if (!_pageController.hasClients) {
       return;
@@ -224,13 +233,13 @@ class _MainMenuScreenState extends State<MainMenuScreen>
         .then((_) {
           _isInSubScreen = false;
           if (mounted) {
+            final ZenVerseModel active = availableSimulators[_selectedIndex];
+            _syncPreviewWorldPreferences(active);
             if (!_ticker.isActive) {
               _lastElapsed = Duration.zero;
               _ticker.start();
             }
-            AudioService.instance.startAmbientForWorld(
-              availableSimulators[_selectedIndex].id,
-            );
+            AudioService.instance.startAmbientForWorld(active.id);
             setState(() {});
           }
         });
@@ -539,6 +548,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   });
                   StorageService.instance.saveStyleMode(
                     _previewController.styleMode,
+                    worldId: activeSim.id,
                   );
                 },
               ),
@@ -556,6 +566,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   });
                   StorageService.instance.saveAtmosphereMode(
                     _previewController.atmosphereMode,
+                    worldId: activeSim.id,
                   );
                 },
               ),
@@ -828,17 +839,14 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     itemCount: availableSimulators.length,
                     onPageChanged: (idx) {
                       if (_isAnimatingToPage) return;
+                      final ZenVerseModel nextSim = availableSimulators[idx];
                       HapticFeedback.selectionClick();
                       setState(() {
                         _selectedIndex = idx;
-                        _previewController.updateScenicPoints(
-                          availableSimulators[idx].scenicPoints,
-                        );
+                        _syncPreviewWorldPreferences(nextSim);
                       });
                       StorageService.instance.saveSelectedWorldIndex(idx);
-                      AudioService.instance.startAmbientForWorld(
-                        availableSimulators[idx].id,
-                      );
+                      AudioService.instance.startAmbientForWorld(nextSim.id);
                     },
                     itemBuilder: (context, index) {
                       final ZenVerseModel sim = availableSimulators[index];
