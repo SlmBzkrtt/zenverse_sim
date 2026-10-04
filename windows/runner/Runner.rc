@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.objectsimulator" "\0"
-            VALUE "FileDescription", "object_simulator" "\0"
+            VALUE "CompanyName", "com.selimbozkurt.zenverse_sim" "\0"
+            VALUE "FileDescription", "ZenVerse: Chill Object Sim" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "object_simulator" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.objectsimulator. All rights reserved." "\0"
-            VALUE "OriginalFilename", "object_simulator.exe" "\0"
-            VALUE "ProductName", "object_simulator" "\0"
+            VALUE "InternalName", "zenverse_sim" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.selimbozkurt.zenverse_sim. All rights reserved." "\0"
+            VALUE "OriginalFilename", "zenverse_sim.exe" "\0"
+            VALUE "ProductName", "ZenVerse: Chill Object Sim" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

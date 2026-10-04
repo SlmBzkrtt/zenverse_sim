@@ -57,6 +57,22 @@ void main() {
     await tester.tap(find.text('360° Oto'));
     await tester.pump(const Duration(milliseconds: 200));
 
+    // Cycle GPU Fragment Shader & 3D Parallax FX modes
+    final shaderChip = find.descendant(
+      of: find.byType(CoconutSimulatorScreen),
+      matching: find.text('✨ Shader: Işık & 3B'),
+    );
+    expect(shaderChip, findsOneWidget);
+    await tester.tap(shaderChip);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      find.descendant(
+        of: find.byType(CoconutSimulatorScreen),
+        matching: find.text('🌌 Shader: Aurora'),
+      ),
+      findsOneWidget,
+    );
+
     // Tap quick look chip inside CoconutSimulatorScreen
     final sunsetChip = find.descendant(
       of: find.byType(CoconutSimulatorScreen),

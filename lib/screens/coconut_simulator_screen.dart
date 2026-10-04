@@ -13,10 +13,12 @@ import '../painters/desert_cactus_world_painter.dart';
 import '../painters/pine_forest_world_painter.dart';
 import '../painters/street_lamp_world_painter.dart';
 import '../painters/zen_valley_world_painter.dart';
+import '../painters/zenverse_shader_painter.dart';
 import '../services/audio_service.dart';
 import '../services/storage_service.dart';
 
-export '../controllers/zenverse_controller.dart' show CameraRotationMode;
+export '../controllers/zenverse_controller.dart'
+    show CameraRotationMode, ZenVerseShaderMode;
 
 class CoconutSimulatorScreen extends StatefulWidget {
   final ZenVerseModel simulator;
@@ -58,6 +60,7 @@ class _CoconutSimulatorScreenState extends State<CoconutSimulatorScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     CologneChristmasAssets.ensureLoaded();
+    ZenVerseShaderPainter.preloadShader();
 
     _gameController = ZenVerseController(
       scenicPoints: _scenicPoints,
@@ -198,6 +201,22 @@ class _CoconutSimulatorScreenState extends State<CoconutSimulatorScreen>
     });
   }
 
+  void _cycleShaderMode() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _gameController.cycleShaderMode();
+    });
+  }
+
+  String _getShaderButtonLabel() {
+    return switch (_gameController.shaderMode) {
+      ZenVerseShaderMode.cinematicGodRays => '✨ Shader: Işık & 3B',
+      ZenVerseShaderMode.auroraDream => '🌌 Shader: Aurora',
+      ZenVerseShaderMode.cozyRefraction => '💧 Shader: Mercek',
+      ZenVerseShaderMode.off => '🚫 Shader: Kapalı',
+    };
+  }
+
   String _getStyleButtonLabel() {
     final labels = widget.simulator.styleLabels;
     final idx = _gameController.styleMode.index.clamp(0, labels.length - 1);
@@ -301,10 +320,14 @@ class _CoconutSimulatorScreenState extends State<CoconutSimulatorScreen>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // 1. Isolated 60 FPS Live 360° World Canvas (Zero Widget Rebuilds per Frame)
+                  // 1. Isolated 60 FPS Live 360° World Canvas + GPU Shader & 3D Parallax
                   RepaintBoundary(
                     child: CustomPaint(
                       painter: _buildWorldPainter(),
+                      foregroundPainter: ZenVerseShaderPainter(
+                        controller: _gameController,
+                        simulatorId: widget.simulator.id,
+                      ),
                       size: Size.infinite,
                     ),
                   ),
@@ -841,7 +864,14 @@ class _CoconutSimulatorScreenState extends State<CoconutSimulatorScreen>
                           active: _gameController.cameraZoom != 1.0,
                           onTap: _cycleZoom,
                         ),
-                        // 5. Ambient Display Mode Toggle
+                        // 5. GPU Fragment Shader & 3D Parallax FX Mode
+                        _buildModeButton(
+                          label: _getShaderButtonLabel(),
+                          active: _gameController.shaderMode !=
+                              ZenVerseShaderMode.off,
+                          onTap: _cycleShaderMode,
+                        ),
+                        // 6. Ambient Display Mode Toggle
                         _buildModeButton(
                           label: '🖥️ Display',
                           active: _isDisplayMode,

@@ -82,8 +82,6 @@ class ZenVerseModel {
   }
 }
 
-typedef SimulatorModel = ZenVerseModel;
-
 const List<ZenVerseModel> availableSimulators = [
   // 1. COCONUT SIMULATOR
   ZenVerseModel(

@@ -51,5 +51,3 @@ class ZenVerseApp extends StatelessWidget {
     );
   }
 }
-
-typedef ObjectSimulatorApp = ZenVerseApp;

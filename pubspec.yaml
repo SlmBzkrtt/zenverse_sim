@@ -70,3 +70,7 @@ flutter:
   assets:
     - assets/cologne/
 
+  shaders:
+    - shaders/zenverse_fx.frag
+
+
