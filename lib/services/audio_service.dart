@@ -86,7 +86,7 @@ class AudioService {
       return _tempAudioDir!;
     }
     final Directory dir = Directory(
-      '${Directory.systemTemp.path}/zenverse_audio_v3',
+      '${Directory.systemTemp.path}/zenverse_audio_v5',
     );
     if (!dir.existsSync()) {
       dir.createSync(recursive: true);
@@ -136,8 +136,8 @@ class AudioService {
     } catch (_) {}
   }
 
-  /// Starts or updates the world's full-length background music playlist
-  /// and primes the subtle (10%–14%) 360° directional ambient layer.
+  /// Starts or updates the world's full-length background music playlist (95%)
+  /// and primes the whisper-soft (3%–5%) 360° directional ambient layer.
   Future<void> startAmbientForWorld(
     String worldId, {
     CoconutAtmosphereMode? atmosphere,
@@ -187,11 +187,12 @@ class AudioService {
     final List<String> playlist =
         _worldMusicPlaylists[worldId] ?? _worldMusicPlaylists['coconut']!;
     final String targetAsset = playlist[trackIdx % playlist.length];
+    final double musicVol = _getMusicVolumeForAtmosphere();
 
     if (_activeMusicAsset == targetAsset || _isUpdatingMusic) {
       // Keep playing seamlessly without restarting if already playing this track
       try {
-        await _musicPlayer?.setVolume(_getMusicVolumeForAtmosphere());
+        await _musicPlayer?.setVolume(musicVol);
       } catch (_) {}
       return;
     }
@@ -207,8 +208,9 @@ class AudioService {
         _musicPlayer = player;
       }
       _activeMusicAsset = targetAsset;
-      await _musicPlayer!.setVolume(_getMusicVolumeForAtmosphere());
+      await _musicPlayer!.setVolume(musicVol);
       await _musicPlayer!.play(AssetSource(targetAsset));
+      await _musicPlayer!.setVolume(musicVol);
     } catch (_) {
       // Gracefully ignore in headless widget tests
     } finally {
@@ -224,16 +226,17 @@ class AudioService {
     _ensureMusicTrackPlaying(_currentWorldId!, _currentTrackIndex);
   }
 
+  /// Background music sits at ~95% volume as the primary audio experience.
   double _getMusicVolumeForAtmosphere() {
     return switch (_currentAtmosphere) {
-      CoconutAtmosphereMode.sunset => 0.72,
-      CoconutAtmosphereMode.noon => 0.74,
-      CoconutAtmosphereMode.night => 0.66,
-      CoconutAtmosphereMode.rain => 0.68,
+      CoconutAtmosphereMode.sunset => 0.95,
+      CoconutAtmosphereMode.noon => 0.95,
+      CoconutAtmosphereMode.night => 0.92,
+      CoconutAtmosphereMode.rain => 0.94,
     };
   }
 
-  /// Updates the subtle 360° directional ambient color layer (10%–14% volume)
+  /// Updates the whisper-soft 360° directional ambient layer (3%–5% volume)
   /// as the camera rotates around the world.
   void updateCameraOrientation({
     required double yaw,
@@ -246,11 +249,11 @@ class AudioService {
 
     final DateTime now = DateTime.now();
     final double angleDiff = (normalizedYaw - _lastSpatialYaw).abs();
-    if (angleDiff < 4.0 &&
-        now.difference(_lastSpatialUpdate).inMilliseconds < 200) {
+    if (angleDiff < 4.5 &&
+        now.difference(_lastSpatialUpdate).inMilliseconds < 220) {
       return;
     }
-    if (now.difference(_lastSpatialUpdate).inMilliseconds < 110) {
+    if (now.difference(_lastSpatialUpdate).inMilliseconds < 120) {
       return;
     }
 
@@ -273,7 +276,7 @@ class AudioService {
     if (isMuted || _isPausedByLifecycle || _isUpdatingDirectional) return;
 
     final _DirectionalSpot spot = _resolveClosestSpot(worldId, yaw);
-    final String dirKey = 'sub_dir_${worldId}_z${spot.zoneIndex}';
+    final String dirKey = 'whisper_dir_${worldId}_z${spot.zoneIndex}';
 
     _isUpdatingDirectional = true;
     try {
@@ -283,9 +286,9 @@ class AudioService {
         _directionalPlayer = player;
       }
 
-      // Strictly keep 360° directional effects in the subtle 10%–15% range
+      // Strictly keep 360° directional effects at 3%–5% (0.03–0.05) volume
       final double targetVol =
-          (spot.volume * (isMenuPreview ? 0.85 : 1.0)).clamp(0.08, 0.15);
+          (spot.volume * (isMenuPreview ? 0.80 : 1.0)).clamp(0.025, 0.05);
 
       if (forceSwitch ||
           _activeDirectionalKey != dirKey ||
@@ -299,6 +302,8 @@ class AudioService {
         await _directionalPlayer!.setVolume(targetVol);
         await _directionalPlayer!.setBalance(spot.pan);
         await _directionalPlayer!.play(source);
+        await _directionalPlayer!.setVolume(targetVol);
+        await _directionalPlayer!.setBalance(spot.pan);
       } else {
         await _directionalPlayer!.setVolume(targetVol);
         await _directionalPlayer!.setBalance(spot.pan);
@@ -313,7 +318,7 @@ class AudioService {
   Future<void> playInteractionChime() async {
     if (isMuted || _isPausedByLifecycle) return;
     final String worldId = _currentWorldId ?? 'coconut';
-    final String sfxKey = 'sfx_soft_$worldId';
+    final String sfxKey = 'sfx_whisper_$worldId';
     try {
       if (_sfxPlayer == null) {
         final player = AudioPlayer();
@@ -324,8 +329,9 @@ class AudioService {
         sfxKey,
         () => _buildWorldChimeWav(worldId),
       );
-      await _sfxPlayer!.setVolume(0.24);
+      await _sfxPlayer!.setVolume(0.08);
       await _sfxPlayer!.play(source);
+      await _sfxPlayer!.setVolume(0.08);
     } catch (_) {}
   }
 
@@ -368,7 +374,7 @@ class AudioService {
   }
 
   // ---------------------------------------------------------------------------
-  // 360° DIRECTIONAL ZONE RESOLUTION (SUBTLE 10%–15% SPATIAL LAYER)
+  // 360° DIRECTIONAL ZONE RESOLUTION (STRICTLY 3%–5% WHISPER LAYER)
   // ---------------------------------------------------------------------------
   static const List<double> _zoneCenterAngles = [0.0, 74.0, 128.0, 168.0, 235.0];
 
@@ -388,10 +394,10 @@ class AudioService {
       }
     }
 
-    // Subtle 0.09 (9%) to 0.145 (14.5%) volume so it gently colors the background music
+    // Strictly 0.03 (3%) to 0.05 (5%) volume
     final double proximity = (1.0 - (bestAbsDiff / 65.0)).clamp(0.0, 1.0);
-    final double volume = 0.09 + 0.055 * proximity;
-    final double pan = (signedDiffForBest / 55.0).clamp(-0.55, 0.55);
+    final double volume = 0.03 + 0.02 * proximity;
+    final double pan = (signedDiffForBest / 55.0).clamp(-0.50, 0.50);
 
     return _DirectionalSpot(
       zoneIndex: bestZone,
@@ -401,8 +407,8 @@ class AudioService {
   }
 
   // ---------------------------------------------------------------------------
-  // GENTLE, NATURAL 360° ENVIRONMENTAL TEXTURE SYNTHESIZER (5.0s LOOP)
-  // Soft surf, crackling fire, water trickle, gentle breeze — no harsh beeps.
+  // WHISPER-SOFT 360° NATURAL BREEZE / WATER / FIRE TEXTURE (5.0s LOOP)
+  // Zero sine-wave tones or beeps. Attenuated directly in PCM to ~5% amplitude.
   // ---------------------------------------------------------------------------
   Uint8List _buildSubtleDirectionalWav(String worldId, int zoneIndex) {
     const int sampleRate = 22050;
@@ -419,120 +425,45 @@ class AudioService {
       final double t = i / sampleRate;
       final double rad = (t / durationSeconds) * 2.0 * math.pi;
       final double white = rng.nextDouble() * 2.0 - 1.0;
-      lpSlow = lpSlow * 0.975 + white * 0.025;
-      lpMid = lpMid * 0.90 + white * 0.10;
+      lpSlow = lpSlow * 0.982 + white * 0.018;
+      lpMid = lpMid * 0.935 + white * 0.065;
 
       double sample = 0.0;
 
       switch (worldId) {
         case 'coconut':
           if (zoneIndex == 0 || zoneIndex == 1) {
-            // Soft ocean surf wash & gentle pier water
             final double wave = 0.45 + 0.55 * math.sin(rad);
-            sample = lpSlow * 0.65 * wave;
+            sample = lpSlow * 0.50 * wave;
           } else if (zoneIndex == 3) {
-            // Warm campfire crackle
-            final double crackle = (rng.nextDouble() > 0.992) ? 0.25 : 0.0;
-            sample = lpMid * 0.25 + crackle;
+            final double crackle = (rng.nextDouble() > 0.995) ? 0.10 : 0.0;
+            sample = lpMid * 0.18 + crackle;
           } else {
-            // Soft tropical palm breeze & distant bamboo wind chime
-            final double chime = math.sin(2.0 * math.pi * 587.33 * t) *
-                math.exp(-((t % 2.5) * 3.8)) *
-                0.12;
-            sample = lpSlow * 0.35 + chime;
+            sample = lpSlow * 0.25;
           }
         case 'pine_tree':
           if (zoneIndex == 0) {
-            // Soft rhythmic steam train whoosh in distance
-            final double chug = (0.5 + 0.5 * math.sin(rad * 6.0));
-            sample = lpMid * 0.38 * chug;
-          } else if (zoneIndex == 1 || zoneIndex == 3) {
-            // Bubbling warm hot tub / campfire & waterfall
-            final double crackle = (rng.nextDouble() > 0.993) ? 0.20 : 0.0;
-            sample = lpSlow * 0.45 + crackle;
+            final double chug = 0.5 + 0.5 * math.sin(rad * 4.0);
+            sample = lpSlow * 0.30 * chug;
           } else {
-            // Soft alpine snow breeze & distant sleigh shimmer
-            final double bell = math.sin(2.0 * math.pi * 1568.0 * t) *
-                math.exp(-((t % 2.5) * 5.0)) *
-                0.08;
-            sample = lpSlow * 0.40 + bell;
+            sample = lpSlow * 0.28;
           }
         case 'mossy_rock':
-          if (zoneIndex == 0 || zoneIndex == 3) {
-            // Gentle bamboo Kakei water drop & hot spring stream
-            final double dropT = t % 2.5;
-            final double drop = math.sin(2.0 * math.pi * 660.0 * t) *
-                math.exp(-dropT * 10.0) *
-                0.18;
-            sample = lpSlow * 0.38 + drop;
-          } else if (zoneIndex == 4) {
-            // Deep, warm distant templeBonsho resonance
-            final double bell = (math.sin(2.0 * math.pi * 110.0 * t) * 0.22 +
-                    math.sin(2.0 * math.pi * 220.0 * t) * 0.10) *
-                math.exp(-t * 0.9);
-            sample = bell + lpSlow * 0.25;
-          } else {
-            // Soft bamboo grove rustle & Shishi-odoshi knock
-            final double knockT = (t + 1.0) % 2.5;
-            final double knock = math.sin(2.0 * math.pi * 380.0 * t) *
-                math.exp(-knockT * 20.0) *
-                0.20;
-            sample = lpMid * 0.24 + knock;
-          }
+          sample = lpSlow * 0.28 + lpMid * 0.08;
         case 'street_lamp':
-          if (zoneIndex == 0) {
-            // Soft river water & distant vintage tram bell
-            final double bellT = t % 5.0;
-            final double bell = math.sin(2.0 * math.pi * 1174.66 * t) *
-                math.exp(-bellT * 8.0) *
-                0.15;
-            sample = lpSlow * 0.35 + bell;
-          } else if (zoneIndex == 1) {
-            // Gentle plaza stone fountain water
-            sample = lpMid * (0.32 + 0.12 * math.sin(rad * 3.0));
-          } else {
-            // Warm evening plaza ambience
-            sample = lpSlow * 0.30;
-          }
+          sample = lpSlow * 0.24;
         case 'desert_cactus':
-          if (zoneIndex == 1) {
-            // Cascading oasis waterfall & gentle caravan chime
-            final double bellT = t % 2.5;
-            final double bell = math.sin(2.0 * math.pi * 523.25 * t) *
-                math.exp(-bellT * 6.0) *
-                0.12;
-            sample = lpMid * 0.38 + bell;
-          } else if (zoneIndex == 3) {
-            // Crackling Bedouin desert fire
-            final double crackle = (rng.nextDouble() > 0.991) ? 0.22 : 0.0;
-            sample = lpSlow * 0.28 + crackle;
-          } else {
-            // Warm canyon wind sweeping across sandstone
-            final double wind = 0.4 + 0.6 * math.sin(rad);
-            sample = lpSlow * 0.48 * wind;
-          }
+          final double wind = 0.45 + 0.55 * math.sin(rad);
+          sample = lpSlow * 0.32 * wind;
         case 'christmas_tree':
-          if (zoneIndex == 0) {
-            // Distant deep Cologne Cathedral bell resonance
-            final double tollT = t % 2.5;
-            final double bell = (math.sin(2.0 * math.pi * 196.0 * t) * 0.20 +
-                    math.sin(2.0 * math.pi * 392.0 * t) * 0.09) *
-                math.exp(-tollT * 1.8);
-            sample = bell + lpSlow * 0.22;
-          } else if (zoneIndex == 3) {
-            // Warm charcoal grill sizzle & winter market murmur
-            final double sizzle = (rng.nextDouble() > 0.992) ? 0.18 : 0.0;
-            sample = lpMid * 0.26 + sizzle;
-          } else {
-            // Rhine river flow & gentle winter breeze
-            sample = lpSlow * 0.36;
-          }
+          sample = lpSlow * 0.25;
         default:
-          sample = lpSlow * 0.30;
+          sample = lpSlow * 0.24;
       }
 
-      final int pcm16 =
-          (sample.clamp(-0.85, 0.85) * 32767.0).round().clamp(-32768, 32767);
+      // Direct PCM attenuation (* 0.12) so even if OS mixer gain spikes, it remains a 5% whisper
+      final double whisperSample = (sample * 0.12).clamp(-0.12, 0.12);
+      final int pcm16 = (whisperSample * 32767.0).round().clamp(-32768, 32767);
       data.setInt16(44 + i * 2, pcm16, Endian.little);
     }
 
@@ -542,7 +473,7 @@ class AudioService {
 
   Uint8List _buildWorldChimeWav(String worldId) {
     const int sampleRate = 22050;
-    const int numSamples = 6600; // ~300ms
+    const int numSamples = 5500; // ~250ms
     final ByteData data = ByteData(44 + numSamples * 2);
     _writeWavHeader(data, sampleRate, numSamples);
 
@@ -558,9 +489,9 @@ class AudioService {
 
     for (int i = 0; i < numSamples; i++) {
       final double t = i / sampleRate;
-      final double env = math.exp(-t * 13.0);
-      final double signal = (math.sin(2.0 * math.pi * freqs[0] * t) * 0.36 +
-              math.sin(2.0 * math.pi * freqs[1] * t) * 0.20) *
+      final double env = math.exp(-t * 15.0);
+      final double signal = (math.sin(2.0 * math.pi * freqs[0] * t) * 0.08 +
+              math.sin(2.0 * math.pi * freqs[1] * t) * 0.04) *
           env;
       final int pcm16 = (signal * 32767.0).round().clamp(-32768, 32767);
       data.setInt16(44 + i * 2, pcm16, Endian.little);
