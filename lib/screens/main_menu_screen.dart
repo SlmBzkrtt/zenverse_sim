@@ -492,49 +492,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     ),
                   ),
                 ),
-                // 4. Floating ℹ️ Lisans button — bottom-right corner, always visible
-                Positioned(
-                  right: 14,
-                  bottom: MediaQuery.paddingOf(context).bottom + 74,
-                  child: GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      _showMusicCreditsDialog();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 11,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.22),
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.info_outline_rounded,
-                            color: Color(0xFFFFCC80),
-                            size: 14,
-                          ),
-                          SizedBox(width: 5),
-                          Text(
-                            'Lisans',
-                            style: TextStyle(
-                              color: Color(0xFFFFE0B2),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           );
